@@ -157,6 +157,36 @@ class SkillLoader:
         pattern_docs = r"(see|read|refer to|check)\s+([a-zA-Z0-9_-]+\.(?:md|txt|json|yaml))([.,;\s])"
         content = re.sub(pattern_docs, replace_doc_path, content, flags=re.IGNORECASE)
 
+        # Pattern 3: Markdown links - supports multiple formats:
+        # - [`filename.md`](filename.md) - simple filename
+        # - [text](./reference/file.md) - relative path with ./
+        # - [text](scripts/file.js) - directory-based path
+        # Matches patterns like: "Read [`docx-js.md`](docx-js.md)" or "Load [Guide](./reference/guide.md)"
+        def replace_markdown_link(match):
+            prefix = (
+                match.group(1) if match.group(1) else ""
+            )  # e.g., "Read ", "Load ", or empty
+            link_text = match.group(2)  # e.g., "`docx-js.md`" or "Guide"
+            filepath = match.group(
+                3
+            )  # e.g., "docx-js.md", "./reference/file.md", "scripts/file.js"
+
+            # Remove leading ./ if present
+            clean_path = filepath[2:] if filepath.startswith("./") else filepath
+
+            abs_path = skill_dir / clean_path
+            if abs_path.exists():
+                # Preserve the link text style (with or without backticks)
+                return f"{prefix}[{link_text}](`{abs_path}`) (use read_file to access)"
+            return match.group(0)
+
+        # Match markdown link patterns with optional prefix words
+        # Captures: (optional prefix word) [link text] (complete file path including ./)
+        pattern_markdown = r"(?:(Read|See|Check|Refer to|Load|View)\s+)?\[(`?[^`\]]+`?)\]\(((?:\./)?[^)]+\.(?:md|txt|json|yaml|js|py|html))\)"
+        content = re.sub(
+            pattern_markdown, replace_markdown_link, content, flags=re.IGNORECASE
+        )
+
         return content
 
     def discover_skills(self) -> List[Skill]:
