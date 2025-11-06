@@ -40,17 +40,11 @@ mini-agent/
 ├── mini_agent/              # 核心源代码
 │   ├── agent.py             # 主 Agent 循环
 │   ├── llm.py               # LLM 客户端
+│   ├── cli.py               # 命令行接口
 │   ├── config.py            # 配置加载
-│   └── tools/               # 工具实现
-│       ├── base.py          # 工具基类
-│       ├── file_tools.py    # 文件工具
-│       ├── bash_tool.py     # Bash 工具
-│       ├── note_tool.py     # 会话笔记工具
-│       ├── mcp_loader.py    # MCP 加载器
-│       ├── skill_loader.py  # 技能加载器
-│       └── skill_tool.py    # 技能工具
+│   ├── tools/               # 工具实现（文件、Bash、MCP、技能等）
+│   └── skills/              # Claude 技能集（子模块）
 ├── tests/                   # 测试代码
-├── skills/                  # Claude 技能（子模块）
 ├── docs/                    # 文档
 ├── workspace/               # 工作目录
 ├── main.py                  # 交互式入口
@@ -63,13 +57,13 @@ mini-agent/
 
 在交互模式下运行 Agent（`python main.py`）时，可以使用以下命令：
 
-| 命令 | 说明 |
-|------|------|
-| `/exit`, `/quit`, `/q` | 退出 Agent 并显示会话统计信息 |
-| `/help` | 显示帮助信息和可用命令 |
-| `/clear` | 清除消息历史并开始新会话 |
-| `/history` | 显示当前会话的消息数量 |
-| `/stats` | 显示会话统计信息（步数、工具调用、使用的 Token） |
+| 命令                   | 说明                                             |
+| ---------------------- | ------------------------------------------------ |
+| `/exit`, `/quit`, `/q` | 退出 Agent 并显示会话统计信息                    |
+| `/help`                | 显示帮助信息和可用命令                           |
+| `/clear`               | 清除消息历史并开始新会话                         |
+| `/history`             | 显示当前会话的消息数量                           |
+| `/stats`               | 显示会话统计信息（步数、工具调用、使用的 Token） |
 
 ### 2.2 已集成的 MCP 工具
 

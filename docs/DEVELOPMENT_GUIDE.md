@@ -39,17 +39,11 @@ mini-agent/
 ├── mini_agent/              # Core source code
 │   ├── agent.py             # Main agent loop
 │   ├── llm.py               # LLM client
+│   ├── cli.py               # Command-line interface
 │   ├── config.py            # Configuration loading
-│   └── tools/               # Tool implementations
-│       ├── base.py          # Base class for tools
-│       ├── file_tools.py    # File tools
-│       ├── bash_tool.py     # Bash tool
-│       ├── note_tool.py     # Session Note Tool
-│       ├── mcp_loader.py    # MCP loader
-│       ├── skill_loader.py  # Skills loader
-│       └── skill_tool.py    # Skills tool
+│   ├── tools/               # Tool implementations (file, bash, MCP, skills, etc.)
+│   └── skills/              # Claude Skills (submodule)
 ├── tests/                   # Test code
-├── skills/                  # Claude Skills (submodule)
 ├── docs/                    # Documentation
 ├── workspace/               # Working directory
 ├── main.py                  # Interactive entry point
@@ -62,13 +56,13 @@ mini-agent/
 
 When running the agent in interactive mode (`python main.py`), the following commands are available:
 
-| Command | Description |
-|---------|-------------|
-| `/exit`, `/quit`, `/q` | Exit the agent and display session statistics |
-| `/help` | Display help information and available commands |
-| `/clear` | Clear message history and start a new session |
-| `/history` | Show the current session message count |
-| `/stats` | Display session statistics (steps, tool calls, tokens used) |
+| Command                | Description                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| `/exit`, `/quit`, `/q` | Exit the agent and display session statistics               |
+| `/help`                | Display help information and available commands             |
+| `/clear`               | Clear message history and start a new session               |
+| `/history`             | Show the current session message count                      |
+| `/stats`               | Display session statistics (steps, tool calls, tokens used) |
 
 ### 2.2 Integrated MCP Tools
 
