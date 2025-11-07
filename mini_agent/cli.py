@@ -114,25 +114,15 @@ def print_session_info(agent: Agent, workspace_dir: Path, model: str):
         f"{Colors.DIM}│{Colors.RESET} {Colors.BRIGHT_CYAN}Session Info{Colors.RESET}                                         {Colors.DIM}│{Colors.RESET}"
     )
     print(f"{Colors.DIM}├{'─' * 58}┤{Colors.RESET}")
-    print(
-        f"{Colors.DIM}│{Colors.RESET} Model: {model}{' ' * max(0, 49 - len(str(model)))} {Colors.DIM}│{Colors.RESET}"
-    )
-    print(
-        f"{Colors.DIM}│{Colors.RESET} Workspace: {workspace_dir}{' ' * max(0, 45 - len(str(workspace_dir)))} {Colors.DIM}│{Colors.RESET}"
-    )
+    print(f"{Colors.DIM}│{Colors.RESET} Model: {model}{' ' * max(0, 49 - len(str(model)))} {Colors.DIM}│{Colors.RESET}")
+    print(f"{Colors.DIM}│{Colors.RESET} Workspace: {workspace_dir}{' ' * max(0, 45 - len(str(workspace_dir)))} {Colors.DIM}│{Colors.RESET}")
     msg_text = f"{len(agent.messages)} messages"
-    print(
-        f"{Colors.DIM}│{Colors.RESET} Message History: {msg_text}{' ' * max(0, 38 - len(msg_text))} {Colors.DIM}│{Colors.RESET}"
-    )
+    print(f"{Colors.DIM}│{Colors.RESET} Message History: {msg_text}{' ' * max(0, 38 - len(msg_text))} {Colors.DIM}│{Colors.RESET}")
     tools_text = f"{len(agent.tools)} tools"
-    print(
-        f"{Colors.DIM}│{Colors.RESET} Available Tools: {tools_text}{' ' * max(0, 41 - len(tools_text))} {Colors.DIM}│{Colors.RESET}"
-    )
+    print(f"{Colors.DIM}│{Colors.RESET} Available Tools: {tools_text}{' ' * max(0, 41 - len(tools_text))} {Colors.DIM}│{Colors.RESET}")
     print(f"{Colors.DIM}└{'─' * 58}┘{Colors.RESET}")
     print()
-    print(
-        f"{Colors.DIM}Type {Colors.BRIGHT_GREEN}/help{Colors.DIM} for help, {Colors.BRIGHT_GREEN}/exit{Colors.DIM} to quit{Colors.RESET}"
-    )
+    print(f"{Colors.DIM}Type {Colors.BRIGHT_GREEN}/help{Colors.DIM} for help, {Colors.BRIGHT_GREEN}/exit{Colors.DIM} to quit{Colors.RESET}")
     print()
 
 
@@ -152,9 +142,7 @@ def print_stats(agent: Agent, session_start: datetime):
     print(f"  Session Duration: {hours:02d}:{minutes:02d}:{seconds:02d}")
     print(f"  Total Messages: {len(agent.messages)}")
     print(f"    - User Messages: {Colors.BRIGHT_GREEN}{user_msgs}{Colors.RESET}")
-    print(
-        f"    - Assistant Replies: {Colors.BRIGHT_BLUE}{assistant_msgs}{Colors.RESET}"
-    )
+    print(f"    - Assistant Replies: {Colors.BRIGHT_BLUE}{assistant_msgs}{Colors.RESET}")
     print(f"    - Tool Calls: {Colors.BRIGHT_YELLOW}{tool_msgs}{Colors.RESET}")
     print(f"  Available Tools: {len(agent.tools)}")
     print(f"{Colors.DIM}{'─' * 40}{Colors.RESET}\n")
@@ -226,8 +214,7 @@ async def initialize_base_tools(config: Config):
                 search_paths = [
                     Path(skills_dir),  # ./skills for backward compatibility
                     Path("mini_agent") / skills_dir,  # ./mini_agent/skills
-                    Config.get_package_dir()
-                    / skills_dir,  # site-packages/mini_agent/skills
+                    Config.get_package_dir() / skills_dir,  # site-packages/mini_agent/skills
                 ]
 
                 # Find first existing path
@@ -255,17 +242,11 @@ async def initialize_base_tools(config: Config):
                 mcp_tools = await load_mcp_tools_async(str(mcp_config_path))
                 if mcp_tools:
                     tools.extend(mcp_tools)
-                    print(
-                        f"{Colors.GREEN}✅ Loaded {len(mcp_tools)} MCP tools (from: {mcp_config_path}){Colors.RESET}"
-                    )
+                    print(f"{Colors.GREEN}✅ Loaded {len(mcp_tools)} MCP tools (from: {mcp_config_path}){Colors.RESET}")
                 else:
-                    print(
-                        f"{Colors.YELLOW}⚠️  No available MCP tools found{Colors.RESET}"
-                    )
+                    print(f"{Colors.YELLOW}⚠️  No available MCP tools found{Colors.RESET}")
             else:
-                print(
-                    f"{Colors.YELLOW}⚠️  MCP config file not found: {config.tools.mcp_config_path}{Colors.RESET}"
-                )
+                print(f"{Colors.YELLOW}⚠️  MCP config file not found: {config.tools.mcp_config_path}{Colors.RESET}")
         except Exception as e:
             print(f"{Colors.YELLOW}⚠️  Failed to load MCP tools: {e}{Colors.RESET}")
 
@@ -295,15 +276,11 @@ def add_workspace_tools(tools: List[Tool], config: Config, workspace_dir: Path):
                 EditTool(workspace_dir=str(workspace_dir)),
             ]
         )
-        print(
-            f"{Colors.GREEN}✅ Loaded file operation tools (workspace: {workspace_dir}){Colors.RESET}"
-        )
+        print(f"{Colors.GREEN}✅ Loaded file operation tools (workspace: {workspace_dir}){Colors.RESET}")
 
     # Session note tool - needs workspace to store memory file
     if config.tools.enable_note:
-        tools.append(
-            SessionNoteTool(memory_file=str(workspace_dir / ".agent_memory.json"))
-        )
+        tools.append(SessionNoteTool(memory_file=str(workspace_dir / ".agent_memory.json")))
         print(f"{Colors.GREEN}✅ Loaded session note tool{Colors.RESET}")
 
 
@@ -322,13 +299,9 @@ async def run_agent(workspace_dir: Path):
         print(f"{Colors.RED}❌ Configuration file not found{Colors.RESET}")
         print()
         print(f"{Colors.BRIGHT_CYAN}📦 Configuration Search Path:{Colors.RESET}")
-        print(
-            f"  {Colors.DIM}1) mini_agent/config/config.yaml{Colors.RESET} (development)"
-        )
+        print(f"  {Colors.DIM}1) mini_agent/config/config.yaml{Colors.RESET} (development)")
         print(f"  {Colors.DIM}2) ~/.mini-agent/config/config.yaml{Colors.RESET} (user)")
-        print(
-            f"  {Colors.DIM}3) <package>/config/config.yaml{Colors.RESET} (installed)"
-        )
+        print(f"  {Colors.DIM}3) <package>/config/config.yaml{Colors.RESET} (installed)")
         print()
         print(f"{Colors.BRIGHT_YELLOW}🚀 Quick Setup (Recommended):{Colors.RESET}")
         print(
@@ -344,32 +317,22 @@ async def run_agent(workspace_dir: Path):
         user_config_dir = Path.home() / ".mini-agent" / "config"
         example_config = Config.get_package_dir() / "config" / "config-example.yaml"
         print(f"  {Colors.DIM}mkdir -p {user_config_dir}{Colors.RESET}")
-        print(
-            f"  {Colors.DIM}cp {example_config} {user_config_dir}/config.yaml{Colors.RESET}"
-        )
-        print(
-            f"  {Colors.DIM}# Then edit {user_config_dir}/config.yaml to add your API Key{Colors.RESET}"
-        )
+        print(f"  {Colors.DIM}cp {example_config} {user_config_dir}/config.yaml{Colors.RESET}")
+        print(f"  {Colors.DIM}# Then edit {user_config_dir}/config.yaml to add your API Key{Colors.RESET}")
         print()
         return
 
     try:
         config = Config.from_yaml(config_path)
     except FileNotFoundError:
-        print(
-            f"{Colors.RED}❌ Error: Configuration file not found: {config_path}{Colors.RESET}"
-        )
+        print(f"{Colors.RED}❌ Error: Configuration file not found: {config_path}{Colors.RESET}")
         return
     except ValueError as e:
         print(f"{Colors.RED}❌ Error: {e}{Colors.RESET}")
-        print(
-            f"{Colors.YELLOW}Please check the configuration file format{Colors.RESET}"
-        )
+        print(f"{Colors.YELLOW}Please check the configuration file format{Colors.RESET}")
         return
     except Exception as e:
-        print(
-            f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}"
-        )
+        print(f"{Colors.RED}❌ Error: Failed to load configuration file: {e}{Colors.RESET}")
         return
 
     # 2. Initialize LLM client
@@ -388,13 +351,9 @@ async def run_agent(workspace_dir: Path):
     # Create retry callback function to display retry information in terminal
     def on_retry(exception: Exception, attempt: int):
         """Retry callback function to display retry information"""
-        print(
-            f"\n{Colors.BRIGHT_YELLOW}⚠️  LLM call failed (attempt {attempt}): {str(exception)}{Colors.RESET}"
-        )
+        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  LLM call failed (attempt {attempt}): {str(exception)}{Colors.RESET}")
         next_delay = retry_config.calculate_delay(attempt - 1)
-        print(
-            f"{Colors.DIM}   Retrying in {next_delay:.1f}s (attempt {attempt + 1})...{Colors.RESET}"
-        )
+        print(f"{Colors.DIM}   Retrying in {next_delay:.1f}s (attempt {attempt + 1})...{Colors.RESET}")
 
     llm_client = LLMClient(
         api_key=config.llm.api_key,
@@ -406,9 +365,7 @@ async def run_agent(workspace_dir: Path):
     # Set retry callback
     if config.llm.retry.enabled:
         llm_client.retry_callback = on_retry
-        print(
-            f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}"
-        )
+        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}")
 
     # 3. Initialize base tools (independent of workspace)
     tools, skill_loader = await initialize_base_tools(config)
@@ -420,11 +377,9 @@ async def run_agent(workspace_dir: Path):
     system_prompt_path = Config.find_config_file(config.agent.system_prompt_path)
     if system_prompt_path and system_prompt_path.exists():
         system_prompt = system_prompt_path.read_text(encoding="utf-8")
-        print(
-            f"{Colors.GREEN}✅ Loaded system prompt (from: {system_prompt_path}){Colors.RESET}"
-        )
+        print(f"{Colors.GREEN}✅ Loaded system prompt (from: {system_prompt_path}){Colors.RESET}")
     else:
-        system_prompt = "You are an intelligent assistant that can help users complete various tasks."
+        system_prompt = "You are Mini-Agent, an intelligent assistant powered by MiniMax M2 that can help users complete various tasks."
         print(f"{Colors.YELLOW}⚠️  System prompt not found, using default{Colors.RESET}")
 
     # 6. Inject Skills Metadata into System Prompt (Progressive Disclosure - Level 1)
@@ -433,9 +388,7 @@ async def run_agent(workspace_dir: Path):
         if skills_metadata:
             # Replace placeholder with actual metadata
             system_prompt = system_prompt.replace("{SKILLS_METADATA}", skills_metadata)
-            print(
-                f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}"
-            )
+            print(f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}")
         else:
             # Remove placeholder if no skills
             system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
@@ -522,9 +475,7 @@ async def run_agent(workspace_dir: Path):
                 command = user_input.lower()
 
                 if command in ["/exit", "/quit", "/q"]:
-                    print(
-                        f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n"
-                    )
+                    print(f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n")
                     print_stats(agent, session_start)
                     break
 
@@ -536,15 +487,11 @@ async def run_agent(workspace_dir: Path):
                     # Clear message history but keep system prompt
                     old_count = len(agent.messages)
                     agent.messages = [agent.messages[0]]  # Keep only system message
-                    print(
-                        f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n"
-                    )
+                    print(f"{Colors.GREEN}✅ Cleared {old_count - 1} messages, starting new session{Colors.RESET}\n")
                     continue
 
                 elif command == "/history":
-                    print(
-                        f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n"
-                    )
+                    print(f"\n{Colors.BRIGHT_CYAN}Current session message count: {len(agent.messages)}{Colors.RESET}\n")
                     continue
 
                 elif command == "/stats":
@@ -553,23 +500,17 @@ async def run_agent(workspace_dir: Path):
 
                 else:
                     print(f"{Colors.RED}❌ Unknown command: {user_input}{Colors.RESET}")
-                    print(
-                        f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n"
-                    )
+                    print(f"{Colors.DIM}Type /help to see available commands{Colors.RESET}\n")
                     continue
 
             # Normal conversation - exit check
             if user_input.lower() in ["exit", "quit", "q"]:
-                print(
-                    f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n"
-                )
+                print(f"\n{Colors.BRIGHT_YELLOW}👋 Goodbye! Thanks for using Mini Agent{Colors.RESET}\n")
                 print_stats(agent, session_start)
                 break
 
             # Run Agent
-            print(
-                f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Thinking...{Colors.RESET}\n"
-            )
+            print(f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Thinking...{Colors.RESET}\n")
             agent.add_user_message(user_input)
             _ = await agent.run()
 
@@ -577,9 +518,7 @@ async def run_agent(workspace_dir: Path):
             print(f"\n{Colors.DIM}{'─' * 60}{Colors.RESET}\n")
 
         except KeyboardInterrupt:
-            print(
-                f"\n\n{Colors.BRIGHT_YELLOW}👋 Interrupt signal detected, exiting...{Colors.RESET}\n"
-            )
+            print(f"\n\n{Colors.BRIGHT_YELLOW}👋 Interrupt signal detected, exiting...{Colors.RESET}\n")
             print_stats(agent, session_start)
             break
 
@@ -593,9 +532,7 @@ async def run_agent(workspace_dir: Path):
         await cleanup_mcp_connections()
         print(f"{Colors.GREEN}✅ Cleanup complete{Colors.RESET}\n")
     except Exception as e:
-        print(
-            f"{Colors.YELLOW}Error during cleanup (can be ignored): {e}{Colors.RESET}\n"
-        )
+        print(f"{Colors.YELLOW}Error during cleanup (can be ignored): {e}{Colors.RESET}\n")
 
 
 def main():

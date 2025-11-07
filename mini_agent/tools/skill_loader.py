@@ -135,9 +135,7 @@ class SkillLoader:
                 return f"{prefix}{abs_path}"
             return match.group(0)
 
-        pattern_dirs = (
-            r"(python\s+|`)((?:scripts|examples|templates|reference)/[^\s`\)]+)"
-        )
+        pattern_dirs = r"(python\s+|`)((?:scripts|examples|templates|reference)/[^\s`\)]+)"
         content = re.sub(pattern_dirs, replace_dir_path, content)
 
         # Pattern 2: Direct markdown/document references (forms.md, reference.md, etc.)
@@ -163,13 +161,9 @@ class SkillLoader:
         # - [text](scripts/file.js) - directory-based path
         # Matches patterns like: "Read [`docx-js.md`](docx-js.md)" or "Load [Guide](./reference/guide.md)"
         def replace_markdown_link(match):
-            prefix = (
-                match.group(1) if match.group(1) else ""
-            )  # e.g., "Read ", "Load ", or empty
+            prefix = match.group(1) if match.group(1) else ""  # e.g., "Read ", "Load ", or empty
             link_text = match.group(2)  # e.g., "`docx-js.md`" or "Guide"
-            filepath = match.group(
-                3
-            )  # e.g., "docx-js.md", "./reference/file.md", "scripts/file.js"
+            filepath = match.group(3)  # e.g., "docx-js.md", "./reference/file.md", "scripts/file.js"
 
             # Remove leading ./ if present
             clean_path = filepath[2:] if filepath.startswith("./") else filepath
@@ -182,10 +176,10 @@ class SkillLoader:
 
         # Match markdown link patterns with optional prefix words
         # Captures: (optional prefix word) [link text] (complete file path including ./)
-        pattern_markdown = r"(?:(Read|See|Check|Refer to|Load|View)\s+)?\[(`?[^`\]]+`?)\]\(((?:\./)?[^)]+\.(?:md|txt|json|yaml|js|py|html))\)"
-        content = re.sub(
-            pattern_markdown, replace_markdown_link, content, flags=re.IGNORECASE
+        pattern_markdown = (
+            r"(?:(Read|See|Check|Refer to|Load|View)\s+)?\[(`?[^`\]]+`?)\]\(((?:\./)?[^)]+\.(?:md|txt|json|yaml|js|py|html))\)"
         )
+        content = re.sub(pattern_markdown, replace_markdown_link, content, flags=re.IGNORECASE)
 
         return content
 
@@ -244,59 +238,11 @@ class SkillLoader:
             return ""
 
         prompt_parts = ["## Available Skills\n"]
-        prompt_parts.append(
-            "You have access to specialized skills. Each skill provides expert guidance for specific tasks.\n"
-        )
-        prompt_parts.append(
-            "Load a skill's full content using the appropriate skill tool when needed.\n"
-        )
+        prompt_parts.append("You have access to specialized skills. Each skill provides expert guidance for specific tasks.\n")
+        prompt_parts.append("Load a skill's full content using the appropriate skill tool when needed.\n")
 
         # List all skills with their descriptions
         for skill in self.loaded_skills.values():
             prompt_parts.append(f"- `{skill.name}`: {skill.description}")
 
         return "\n".join(prompt_parts)
-
-    def get_skills_prompt(self, skill_names: Optional[List[str]] = None) -> str:
-        """
-        Generate prompt containing specified skills
-
-        Args:
-            skill_names: List of skill names to include, None means include all skills
-
-        Returns:
-            Combined prompt string
-        """
-        if skill_names is None:
-            skills = list(self.loaded_skills.values())
-        else:
-            skills = [
-                self.loaded_skills[name]
-                for name in skill_names
-                if name in self.loaded_skills
-            ]
-
-        if not skills:
-            return ""
-
-        prompt_parts = ["# Available Skills\n"]
-        for skill in skills:
-            prompt_parts.append(skill.to_prompt())
-
-        return "\n".join(prompt_parts)
-
-
-# Example usage
-def load_example_skills() -> SkillLoader:
-    """Load example skills (for testing)"""
-    loader = SkillLoader("./skills/example-skills")
-    skills = loader.discover_skills()
-    print(f"✅ Discovered {len(skills)} skills:")
-    for skill in skills:
-        print(f"  - {skill.name}: {skill.description}")
-    return loader
-
-
-if __name__ == "__main__":
-    # Test
-    loader = load_example_skills()

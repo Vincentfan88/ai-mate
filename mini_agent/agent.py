@@ -182,7 +182,7 @@ class Agent:
             if execution_messages:
                 summary_text = await self._create_summary(execution_messages, user_idx, i + 1)
                 if summary_text:
-                    summary_message = Message(role="user", content=f"[Execution Summary]\n\n{summary_text}")
+                    summary_message = Message(role="user", content=f"[Assistant Execution Summary]\n\n{summary_text}")
                     new_messages.append(summary_message)
                     summary_count += 1
 
@@ -212,12 +212,12 @@ class Agent:
         for msg in messages:
             if msg.role == "assistant":
                 content_text = msg.content if isinstance(msg.content, str) else str(msg.content)
-                summary_content += f"Assistant: {content_text[:200]}\n"
+                summary_content += f"Assistant: {content_text}\n"
                 if msg.tool_calls:
                     tool_names = [tc["function"]["name"] for tc in msg.tool_calls]
                     summary_content += f"  → Called tools: {', '.join(tool_names)}\n"
             elif msg.role == "tool":
-                result_preview = msg.content[:100] if isinstance(msg.content, str) else str(msg.content)[:100]
+                result_preview = msg.content if isinstance(msg.content, str) else str(msg.content)
                 summary_content += f"  ← Tool returned: {result_preview}...\n"
 
         # Call LLM to generate concise summary
@@ -229,7 +229,7 @@ class Agent:
 Requirements:
 1. Focus on what tasks were completed and which tools were called
 2. Keep key execution results and important findings
-3. Be concise and clear, within 300 words
+3. Be concise and clear, within 1000 words
 4. Use English
 5. Do not include "user" related content, only summarize the Agent's execution process"""
 
@@ -335,7 +335,15 @@ Requirements:
 
                 # Arguments (formatted display)
                 print(f"{Colors.DIM}   Arguments:{Colors.RESET}")
-                args_json = json.dumps(arguments, indent=2, ensure_ascii=False)
+                # Truncate each argument value to avoid overly long output
+                truncated_args = {}
+                for key, value in arguments.items():
+                    value_str = str(value)
+                    if len(value_str) > 200:
+                        truncated_args[key] = value_str[:200] + "..."
+                    else:
+                        truncated_args[key] = value
+                args_json = json.dumps(truncated_args, indent=2, ensure_ascii=False)
                 for line in args_json.split("\n"):
                     print(f"   {Colors.DIM}{line}{Colors.RESET}")
 

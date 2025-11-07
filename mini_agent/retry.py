@@ -67,9 +67,7 @@ class RetryExhaustedError(Exception):
     def __init__(self, last_exception: Exception, attempts: int):
         self.last_exception = last_exception
         self.attempts = attempts
-        super().__init__(
-            f"Retry failed after {attempts} attempts. Last error: {str(last_exception)}"
-        )
+        super().__init__(f"Retry failed after {attempts} attempts. Last error: {str(last_exception)}")
 
 
 def async_retry(
@@ -111,9 +109,7 @@ def async_retry(
 
                     # If this is the last attempt, don't retry
                     if attempt >= config.max_retries:
-                        logger.error(
-                            f"Function {func.__name__} retry failed, reached maximum retry count {config.max_retries}"
-                        )
+                        logger.error(f"Function {func.__name__} retry failed, reached maximum retry count {config.max_retries}")
                         raise RetryExhaustedError(e, attempt + 1)
 
                     # Calculate delay time
@@ -140,41 +136,3 @@ def async_retry(
         return wrapper
 
     return decorator
-
-
-async def retry_async_call(
-    func: Callable[..., Any],
-    *args: Any,
-    config: RetryConfig | None = None,
-    on_retry: Callable[[Exception, int], None] | None = None,
-    **kwargs: Any,
-) -> Any:
-    """Directly call async function with retry logic applied
-
-    Suitable for scenarios where decorators cannot be used.
-
-    Args:
-        func: Async function to execute
-        *args: Positional arguments for the function
-        config: Retry configuration object
-        on_retry: Callback function on retry
-        **kwargs: Keyword arguments for the function
-
-    Returns:
-        Function execution result
-
-    Example:
-        ```python
-        result = await retry_async_call(
-            api_call,
-            param1, param2,
-            config=RetryConfig(max_retries=3),
-            on_retry=lambda e, n: print(f"Retry {n}: {e}")
-        )
-        ```
-    """
-    if config is None:
-        config = RetryConfig()
-
-    decorated_func = async_retry(config=config, on_retry=on_retry)(func)
-    return await decorated_func(*args, **kwargs)

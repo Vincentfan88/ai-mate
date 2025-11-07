@@ -130,29 +130,6 @@ def test_get_skill():
         assert loader.get_skill("nonexistent") is None
 
 
-def test_get_skills_prompt():
-    """Test generating skills prompt"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create two skills
-        for name in ["skill-a", "skill-b"]:
-            skill_dir = Path(tmpdir) / name
-            skill_dir.mkdir()
-            create_test_skill(skill_dir, name, f"{name} description", f"{name} content")
-
-        loader = SkillLoader(tmpdir)
-        loader.discover_skills()
-
-        # Test generating prompt for all skills
-        prompt = loader.get_skills_prompt()
-        assert "skill-a" in prompt
-        assert "skill-b" in prompt
-        assert "Available Skills" in prompt
-
-        # Test generating prompt for specific skills
-        prompt = loader.get_skills_prompt(["skill-a"])
-        assert "skill-a" in prompt
-        assert "skill-b" not in prompt
-
 
 def test_get_skills_metadata_prompt():
     """Test generating metadata-only prompt (Progressive Disclosure Level 1)"""
@@ -205,11 +182,6 @@ Even more content to make this realistic.
         assert "Detailed Skill Content" not in metadata_prompt
         assert "Section 1" not in metadata_prompt
         assert "Section 2" not in metadata_prompt
-
-        # Metadata should be significantly shorter than full prompt
-        full_prompt = loader.get_skills_prompt()
-        # With realistic content, metadata should be much shorter
-        assert len(metadata_prompt) < len(full_prompt) * 0.2  # Should be < 20% of full
 
 
 def test_nested_document_path_processing():
