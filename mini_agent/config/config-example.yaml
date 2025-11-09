@@ -12,13 +12,13 @@
 
 # ===== LLM Configuration =====
 # MiniMax API Configuration
-# MiniMax provides both domestic (China) and overseas platforms:
-# - Domestic (China): https://platform.minimaxi.com -> api_base: https://api.minimaxi.com/anthropic
-# - Overseas: https://platform.minimax.io -> api_base: https://api.minimax.io/anthropic
+# MiniMax provides both global and China platforms:
+# - Global: https://platform.minimax.io -> api_base: https://api.minimax.io/anthropic
+# - China: https://platform.minimaxi.com -> api_base: https://api.minimaxi.com/anthropic
 # Please choose based on your network environment and get API key from corresponding platform
 api_key: "YOUR_API_KEY_HERE"  # Replace with your MiniMax API Key
-api_base: "https://api.minimaxi.com/anthropic"  # Domestic users / 国内用户
-# api_base: "https://api.minimax.io/anthropic"  # Overseas users / 海外用户
+api_base: "https://api.minimax.io/anthropic"  # Global users
+# api_base: "https://api.minimaxi.com/anthropic"  # China users
 model: "MiniMax-M2"
 
 # ===== Retry Configuration =====

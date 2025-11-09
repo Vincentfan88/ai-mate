@@ -39,12 +39,12 @@ This project comes packed with features designed for a robust and intelligent ag
 
 ### 1. Get API Key
 
-MiniMax provides both domestic (China) and overseas platforms. Choose based on your network environment:
+MiniMax provides both global and China platforms. Choose based on your network environment:
 
 | Version              | Platform                                                       | API Base                             |
 | -------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| **Domestic (China)** | [https://platform.minimaxi.com](https://platform.minimaxi.com) | `https://api.minimaxi.com/anthropic` |
-| **Overseas**         | [https://platform.minimax.io](https://platform.minimax.io)     | `https://api.minimax.io/anthropic`   |
+| **Global**           | [https://platform.minimax.io](https://platform.minimax.io)     | `https://api.minimax.io/anthropic`   |
+| **China**            | [https://platform.minimaxi.com](https://platform.minimaxi.com) | `https://api.minimaxi.com/anthropic` |
 
 **Steps to get API Key:**
 1. Visit the corresponding platform to register and login
@@ -104,8 +104,8 @@ Fill in your API Key and corresponding API Base:
 
 ```yaml
 api_key: "YOUR_API_KEY_HERE"          # API Key from step 1
-api_base: "https://api.minimaxi.com/anthropic"  # Domestic (China)
-# api_base: "https://api.minimax.io/anthropic"  # Overseas (uncomment if using overseas platform)
+api_base: "https://api.minimax.io/anthropic"  # Global
+# api_base: "https://api.minimaxi.com/anthropic"  # China
 model: "MiniMax-M2"
 ```
 
@@ -145,8 +145,8 @@ Fill in your API Key and corresponding API Base:
 
 ```yaml
 api_key: "YOUR_API_KEY_HERE"          # API Key from step 1
-api_base: "https://api.minimaxi.com/anthropic"  # Domestic (China)
-# api_base: "https://api.minimax.io/anthropic"  # Overseas (uncomment if using overseas platform)
+api_base: "https://api.minimax.io/anthropic"  # Global
+# api_base: "https://api.minimaxi.com/anthropic"  # China
 model: "MiniMax-M2"
 max_steps: 100
 workspace_dir: "./workspace"
