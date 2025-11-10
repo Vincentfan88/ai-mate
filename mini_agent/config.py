@@ -3,14 +3,13 @@
 Provides unified configuration loading and management functionality
 """
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class RetryConfig:
+class RetryConfig(BaseModel):
     """Retry configuration"""
 
     enabled: bool = True
@@ -20,23 +19,16 @@ class RetryConfig:
     exponential_base: float = 2.0
 
 
-@dataclass
-class LLMConfig:
+class LLMConfig(BaseModel):
     """LLM configuration"""
 
     api_key: str
     api_base: str = "https://api.minimax.io/anthropic"
     model: str = "MiniMax-M2"
-    retry: RetryConfig = None
-
-    def __post_init__(self):
-        """Post-initialization processing"""
-        if self.retry is None:
-            self.retry = RetryConfig()
+    retry: RetryConfig = Field(default_factory=RetryConfig)
 
 
-@dataclass
-class AgentConfig:
+class AgentConfig(BaseModel):
     """Agent configuration"""
 
     max_steps: int = 50
@@ -44,8 +36,7 @@ class AgentConfig:
     system_prompt_path: str = "system_prompt.md"
 
 
-@dataclass
-class ToolsConfig:
+class ToolsConfig(BaseModel):
     """Tools configuration"""
 
     # Basic tools (file operations, bash)
@@ -62,8 +53,7 @@ class ToolsConfig:
     mcp_config_path: str = "mcp.json"
 
 
-@dataclass
-class Config:
+class Config(BaseModel):
     """Main configuration class"""
 
     llm: LLMConfig
