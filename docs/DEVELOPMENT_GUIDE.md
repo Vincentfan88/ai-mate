@@ -140,7 +140,7 @@ class MyTool(Tool):
     
     @property
     def parameters(self) -> Dict[str, Any]:
-        """Parameter schema in OpenAI function-calling format."""
+        """Parameter schema in JSON Schema format."""
         return {
             "type": "object",
             "properties": {

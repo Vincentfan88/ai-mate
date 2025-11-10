@@ -134,10 +134,13 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # 3. 同步依赖
 uv sync
 
-# 4. 复制配置模板
+# 4. 初始化 Claude Skills（可选）
+git submodule update --init --recursive
+
+# 5. 复制配置模板
 cp mini_agent/config/config-example.yaml mini_agent/config/config.yaml
 
-# 5. 编辑配置文件
+# 6. 编辑配置文件
 vim mini_agent/config/config.yaml  # 或使用您偏好的编辑器
 ```
 

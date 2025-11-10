@@ -2,12 +2,12 @@
 
 import json
 from pathlib import Path
-from typing import List
 
 import tiktoken
 
-from .llm import LLMClient, Message
+from .llm import LLMClient
 from .logger import AgentLogger
+from .schema import Message
 from .tools.base import Tool, ToolResult
 
 
@@ -45,7 +45,7 @@ class Agent:
         self,
         llm_client: LLMClient,
         system_prompt: str,
-        tools: List[Tool],
+        tools: list[Tool],
         max_steps: int = 50,
         workspace_dir: str = "./workspace",
         token_limit: int = 80000,  # Summary triggered when tokens exceed this value
@@ -67,7 +67,7 @@ class Agent:
         self.system_prompt = system_prompt
 
         # Initialize message history
-        self.messages: List[Message] = [Message(role="system", content=system_prompt)]
+        self.messages: list[Message] = [Message(role="system", content=system_prompt)]
 
         # Initialize logger
         self.logger = AgentLogger()
@@ -190,15 +190,19 @@ class Agent:
         self.messages = new_messages
 
         new_tokens = self._estimate_tokens()
-        print(f"{Colors.BRIGHT_GREEN}✓ Summary completed, tokens reduced from {estimated_tokens} to {new_tokens}{Colors.RESET}")
-        print(f"{Colors.DIM}  Structure: system + {len(user_indices)} user messages + {summary_count} summaries{Colors.RESET}")
+        print(
+            f"{Colors.BRIGHT_GREEN}✓ Summary completed, tokens reduced from {estimated_tokens} to {new_tokens}{Colors.RESET}"
+        )
+        print(
+            f"{Colors.DIM}  Structure: system + {len(user_indices)} user messages + {summary_count} summaries{Colors.RESET}"
+        )
 
-    async def _create_summary(self, messages: List[Message], user_idx: int, round_num: int) -> str:
+    async def _create_summary(self, messages: list[Message], user_idx: int, round_num: int) -> str:
         """Create summary for one execution round
 
         Args:
             messages: List of messages to summarize
-            user_idx: Index of user message
+            user_idx: Index of user message (unused but kept for compatibility)
             round_num: Round number
 
         Returns:
@@ -214,7 +218,7 @@ class Agent:
                 content_text = msg.content if isinstance(msg.content, str) else str(msg.content)
                 summary_content += f"Assistant: {content_text}\n"
                 if msg.tool_calls:
-                    tool_names = [tc["function"]["name"] for tc in msg.tool_calls]
+                    tool_names = [tc.function.name for tc in msg.tool_calls]
                     summary_content += f"  → Called tools: {', '.join(tool_names)}\n"
             elif msg.role == "tool":
                 result_preview = msg.content if isinstance(msg.content, str) else str(msg.content)
@@ -326,12 +330,14 @@ Requirements:
 
             # Execute tool calls
             for tool_call in response.tool_calls:
-                tool_call_id = tool_call["id"]
-                function_name = tool_call["function"]["name"]
-                arguments = json.loads(tool_call["function"]["arguments"])
+                tool_call_id = tool_call.id
+                function_name = tool_call.function.name
+                arguments = tool_call.function.arguments
 
                 # Tool call header
-                print(f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}")
+                print(
+                    f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}"
+                )
 
                 # Arguments (formatted display)
                 print(f"{Colors.DIM}   Arguments:{Colors.RESET}")
@@ -404,6 +410,6 @@ Requirements:
         print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {error_msg}{Colors.RESET}")
         return error_msg
 
-    def get_history(self) -> List[Message]:
+    def get_history(self) -> list[Message]:
         """Get message history."""
         return self.messages.copy()

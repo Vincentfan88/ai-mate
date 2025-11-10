@@ -51,6 +51,13 @@ testpaths = ["tests"]
 cache_dir = "workspace/.pytest_cache"
 asyncio_mode = "auto"
 
+[tool.pylint.messages_control]
+# Disable warnings for Tool.execute method signature differences
+# We intentionally use explicit parameters in subclasses for better type hints
+disable = [
+    "arguments-differ",  # Allow subclasses to have different parameter signatures
+]
+
 [dependency-groups]
 dev = [
     "pytest-asyncio>=1.2.0",

@@ -3,7 +3,7 @@
 import json
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -18,7 +18,7 @@ class MCPTool(Tool):
         self,
         name: str,
         description: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         session: ClientSession,
     ):
         self._name = name
@@ -35,7 +35,7 @@ class MCPTool(Tool):
         return self._description
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return self._parameters
 
     async def execute(self, **kwargs) -> ToolResult:
@@ -71,14 +71,14 @@ class MCPTool(Tool):
 class MCPServerConnection:
     """Manages connection to a single MCP server."""
 
-    def __init__(self, name: str, command: str, args: List[str], env: Optional[Dict[str, str]] = None):
+    def __init__(self, name: str, command: str, args: list[str], env: dict[str, str] | None = None):
         self.name = name
         self.command = command
         self.args = args
         self.env = env or {}
-        self.session: Optional[ClientSession] = None
-        self.exit_stack: Optional[AsyncExitStack] = None
-        self.tools: List[MCPTool] = []
+        self.session: ClientSession | None = None
+        self.exit_stack: AsyncExitStack | None = None
+        self.tools: list[MCPTool] = []
 
     async def connect(self) -> bool:
         """Connect to the MCP server using proper async context management."""
@@ -148,10 +148,10 @@ class MCPServerConnection:
 
 
 # Global connections registry
-_mcp_connections: List[MCPServerConnection] = []
+_mcp_connections: list[MCPServerConnection] = []
 
 
-async def load_mcp_tools_async(config_path: str = "mcp.json") -> List[Tool]:
+async def load_mcp_tools_async(config_path: str = "mcp.json") -> list[Tool]:
     """
     Load MCP tools from config file.
 

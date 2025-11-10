@@ -1,6 +1,7 @@
 """Base tool classes."""
 
-from typing import Any, Dict
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -8,7 +9,7 @@ class ToolResult(BaseModel):
     """Tool execution result."""
 
     success: bool
-    content: str
+    content: str = ""
     error: str | None = None
 
 
@@ -26,21 +27,18 @@ class Tool:
         raise NotImplementedError
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         """Tool parameters schema (JSON Schema format)."""
         raise NotImplementedError
 
-    async def execute(self, **kwargs) -> ToolResult:
-        """Execute the tool."""
+    async def execute(self, *args, **kwargs) -> ToolResult:  # type: ignore
+        """Execute the tool with arbitrary arguments."""
         raise NotImplementedError
 
-    def to_schema(self) -> Dict[str, Any]:
-        """Convert tool to OpenAI function schema."""
+    def to_schema(self) -> dict[str, Any]:
+        """Convert tool to Anthropic tool schema."""
         return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.parameters,
-            },
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.parameters,
         }

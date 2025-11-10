@@ -141,7 +141,7 @@ class MyTool(Tool):
     
     @property
     def parameters(self) -> Dict[str, Any]:
-        """以 OpenAI 函数调用规范定义的参数模式。"""
+        """参数模式（JSON Schema 格式）。"""
         return {
             "type": "object",
             "properties": {

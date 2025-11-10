@@ -26,7 +26,7 @@ from mini_agent.agent import Agent
 from mini_agent.config import Config
 from mini_agent.llm import LLMClient
 from mini_agent.tools.base import Tool
-from mini_agent.tools.bash_tool import BashTool
+from mini_agent.tools.bash_tool import BashTool, BashKillTool, BashOutputTool
 from mini_agent.tools.file_tools import EditTool, ReadTool, WriteTool
 from mini_agent.tools.mcp_loader import cleanup_mcp_connections, load_mcp_tools_async
 from mini_agent.tools.note_tool import SessionNoteTool
@@ -115,14 +115,22 @@ def print_session_info(agent: Agent, workspace_dir: Path, model: str):
     )
     print(f"{Colors.DIM}├{'─' * 58}┤{Colors.RESET}")
     print(f"{Colors.DIM}│{Colors.RESET} Model: {model}{' ' * max(0, 49 - len(str(model)))} {Colors.DIM}│{Colors.RESET}")
-    print(f"{Colors.DIM}│{Colors.RESET} Workspace: {workspace_dir}{' ' * max(0, 45 - len(str(workspace_dir)))} {Colors.DIM}│{Colors.RESET}")
+    print(
+        f"{Colors.DIM}│{Colors.RESET} Workspace: {workspace_dir}{' ' * max(0, 45 - len(str(workspace_dir)))} {Colors.DIM}│{Colors.RESET}"
+    )
     msg_text = f"{len(agent.messages)} messages"
-    print(f"{Colors.DIM}│{Colors.RESET} Message History: {msg_text}{' ' * max(0, 38 - len(msg_text))} {Colors.DIM}│{Colors.RESET}")
+    print(
+        f"{Colors.DIM}│{Colors.RESET} Message History: {msg_text}{' ' * max(0, 38 - len(msg_text))} {Colors.DIM}│{Colors.RESET}"
+    )
     tools_text = f"{len(agent.tools)} tools"
-    print(f"{Colors.DIM}│{Colors.RESET} Available Tools: {tools_text}{' ' * max(0, 41 - len(tools_text))} {Colors.DIM}│{Colors.RESET}")
+    print(
+        f"{Colors.DIM}│{Colors.RESET} Available Tools: {tools_text}{' ' * max(0, 41 - len(tools_text))} {Colors.DIM}│{Colors.RESET}"
+    )
     print(f"{Colors.DIM}└{'─' * 58}┘{Colors.RESET}")
     print()
-    print(f"{Colors.DIM}Type {Colors.BRIGHT_GREEN}/help{Colors.DIM} for help, {Colors.BRIGHT_GREEN}/exit{Colors.DIM} to quit{Colors.RESET}")
+    print(
+        f"{Colors.DIM}Type {Colors.BRIGHT_GREEN}/help{Colors.DIM} for help, {Colors.BRIGHT_GREEN}/exit{Colors.DIM} to quit{Colors.RESET}"
+    )
     print()
 
 
@@ -196,10 +204,19 @@ async def initialize_base_tools(config: Config):
     tools = []
     skill_loader = None
 
-    # 1. Bash tool
+    # 1. Bash tool and Bash Output tool
     if config.tools.enable_bash:
-        tools.append(BashTool())
+        bash_tool = BashTool()
+        tools.append(bash_tool)
         print(f"{Colors.GREEN}✅ Loaded Bash tool{Colors.RESET}")
+
+        bash_output_tool = BashOutputTool()
+        tools.append(bash_output_tool)
+        print(f"{Colors.GREEN}✅ Loaded Bash Output tool{Colors.RESET}")
+
+        bash_kill_tool = BashKillTool()
+        tools.append(bash_kill_tool)
+        print(f"{Colors.GREEN}✅ Loaded Bash Kill tool{Colors.RESET}")
 
     # 3. Claude Skills (loaded from package directory)
     if config.tools.enable_skills:
@@ -365,7 +382,9 @@ async def run_agent(workspace_dir: Path):
     # Set retry callback
     if config.llm.retry.enabled:
         llm_client.retry_callback = on_retry
-        print(f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}")
+        print(
+            f"{Colors.GREEN}✅ LLM retry mechanism enabled (max {config.llm.retry.max_retries} retries){Colors.RESET}"
+        )
 
     # 3. Initialize base tools (independent of workspace)
     tools, skill_loader = await initialize_base_tools(config)
@@ -388,7 +407,9 @@ async def run_agent(workspace_dir: Path):
         if skills_metadata:
             # Replace placeholder with actual metadata
             system_prompt = system_prompt.replace("{SKILLS_METADATA}", skills_metadata)
-            print(f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}")
+            print(
+                f"{Colors.GREEN}✅ Injected {len(skill_loader.loaded_skills)} skills metadata into system prompt{Colors.RESET}"
+            )
         else:
             # Remove placeholder if no skills
             system_prompt = system_prompt.replace("{SKILLS_METADATA}", "")
@@ -510,7 +531,9 @@ async def run_agent(workspace_dir: Path):
                 break
 
             # Run Agent
-            print(f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Thinking...{Colors.RESET}\n")
+            print(
+                f"\n{Colors.BRIGHT_BLUE}Agent{Colors.RESET} {Colors.DIM}›{Colors.RESET} {Colors.DIM}Thinking...{Colors.RESET}\n"
+            )
             agent.add_user_message(user_input)
             _ = await agent.run()
 

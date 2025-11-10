@@ -24,7 +24,9 @@ async def test_read_tool():
         result = await tool.execute(path=temp_path)
 
         assert result.success, f"Read failed: {result.error}"
-        assert result.content == "Hello, World!", f"Content mismatch: {result.content}"
+        # ReadTool now returns content with line numbers in format: "LINE_NUMBER|LINE_CONTENT"
+        assert "Hello, World!" in result.content, f"Content mismatch: {result.content}"
+        assert "|Hello, World!" in result.content, f"Expected line number format: {result.content}"
         print("✅ ReadTool test passed")
     finally:
         Path(temp_path).unlink()

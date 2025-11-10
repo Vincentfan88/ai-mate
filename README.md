@@ -41,10 +41,10 @@ This project comes packed with features designed for a robust and intelligent ag
 
 MiniMax provides both global and China platforms. Choose based on your network environment:
 
-| Version              | Platform                                                       | API Base                             |
-| -------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| **Global**           | [https://platform.minimax.io](https://platform.minimax.io)     | `https://api.minimax.io/anthropic`   |
-| **China**            | [https://platform.minimaxi.com](https://platform.minimaxi.com) | `https://api.minimaxi.com/anthropic` |
+| Version    | Platform                                                       | API Base                             |
+| ---------- | -------------------------------------------------------------- | ------------------------------------ |
+| **Global** | [https://platform.minimax.io](https://platform.minimax.io)     | `https://api.minimax.io/anthropic`   |
+| **China**  | [https://platform.minimaxi.com](https://platform.minimaxi.com) | `https://api.minimaxi.com/anthropic` |
 
 **Steps to get API Key:**
 1. Visit the corresponding platform to register and login
@@ -134,10 +134,13 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # 3. Sync dependencies
 uv sync
 
-# 4. Copy config template
+# 4. Initialize Claude Skills (Optional)
+git submodule update --init --recursive
+
+# 5. Copy config template
 cp mini_agent/config/config-example.yaml mini_agent/config/config.yaml
 
-# 5. Edit config file
+# 6. Edit config file
 vim mini_agent/config/config.yaml  # Or use your preferred editor
 ```
 

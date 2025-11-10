@@ -1,36 +1,15 @@
 """LLM client for MiniMax M2 via Anthropic-compatible API."""
 
-import json
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 import httpx
-from pydantic import BaseModel
 
 from .retry import RetryConfig as RetryConfigBase
 from .retry import async_retry
+from .schema import FunctionCall, LLMResponse, Message, ToolCall
 
 logger = logging.getLogger(__name__)
-
-
-class Message(BaseModel):
-    """Chat message."""
-
-    role: str  # "system", "user", "assistant", "tool"
-    content: str | List[Dict[str, Any]]  # Can be string or list of content blocks
-    thinking: str | None = None  # Extended thinking content for assistant messages
-    tool_calls: List[Dict[str, Any]] | None = None
-    tool_call_id: str | None = None
-    name: str | None = None  # For tool role
-
-
-class LLMResponse(BaseModel):
-    """LLM response."""
-
-    content: str
-    thinking: str | None = None  # Extended thinking blocks
-    tool_calls: List[Dict[str, Any]] | None = None
-    finish_reason: str
 
 
 class LLMClient:
@@ -55,16 +34,7 @@ class LLMClient:
         # Callback for tracking retry count
         self.retry_callback = None
 
-    def _convert_tool_to_anthropic_format(self, tool: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert OpenAI tool format to Anthropic format."""
-        function = tool.get("function", {})
-        return {
-            "name": function.get("name"),
-            "description": function.get("description"),
-            "input_schema": function.get("parameters", {}),
-        }
-
-    async def _make_api_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _make_api_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Execute API request (core method that can be retried)
 
         Args:
@@ -92,9 +62,7 @@ class LLMClient:
         # Check for errors (Anthropic format)
         if result.get("type") == "error":
             error_info = result.get("error", {})
-            error_msg = (
-                f"API Error ({error_info.get('type')}): {error_info.get('message')}"
-            )
+            error_msg = f"API Error ({error_info.get('type')}): {error_info.get('message')}"
             raise Exception(error_msg)
 
         # Check for MiniMax base_resp errors
@@ -115,8 +83,8 @@ class LLMClient:
 
     async def generate(
         self,
-        messages: List[Message],
-        tools: List[Dict[str, Any]] | None = None,
+        messages: list[Message],
+        tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
         """Generate response from LLM."""
         # Extract system message (Anthropic requires it separately)
@@ -137,9 +105,7 @@ class LLMClient:
 
                     # Add thinking block if present
                     if msg.thinking:
-                        content_blocks.append(
-                            {"type": "thinking", "thinking": msg.thinking}
-                        )
+                        content_blocks.append({"type": "thinking", "thinking": msg.thinking})
 
                     # Add text content if present
                     if msg.content:
@@ -151,17 +117,13 @@ class LLMClient:
                             content_blocks.append(
                                 {
                                     "type": "tool_use",
-                                    "id": tool_call["id"],
-                                    "name": tool_call["function"]["name"],
-                                    "input": json.loads(
-                                        tool_call["function"]["arguments"]
-                                    ),
+                                    "id": tool_call.id,
+                                    "name": tool_call.function.name,
+                                    "input": tool_call.function.arguments,
                                 }
                             )
 
-                    api_messages.append(
-                        {"role": "assistant", "content": content_blocks}
-                    )
+                    api_messages.append({"role": "assistant", "content": content_blocks})
                 else:
                     api_messages.append({"role": msg.role, "content": msg.content})
 
@@ -192,18 +154,14 @@ class LLMClient:
         if system_message:
             payload["system"] = system_message
 
-        # Add tools if provided (convert to Anthropic format)
+        # Add tools if provided
         if tools:
-            payload["tools"] = [
-                self._convert_tool_to_anthropic_format(t) for t in tools
-            ]
+            payload["tools"] = tools
 
         # Make API request with retry logic
         if self.retry_config.enabled:
             # Apply retry logic
-            retry_decorator = async_retry(
-                config=self.retry_config, on_retry=self.retry_callback
-            )
+            retry_decorator = async_retry(config=self.retry_config, on_retry=self.retry_callback)
             api_call = retry_decorator(self._make_api_request)
             result = await api_call(payload)
         else:
@@ -225,16 +183,16 @@ class LLMClient:
             elif block.get("type") == "thinking":
                 thinking_content += block.get("thinking", "")
             elif block.get("type") == "tool_use":
-                # Convert to OpenAI tool call format for compatibility
+                # Parse Anthropic tool_use block
                 tool_calls.append(
-                    {
-                        "id": block.get("id"),
-                        "type": "function",
-                        "function": {
-                            "name": block.get("name"),
-                            "arguments": json.dumps(block.get("input", {})),
-                        },
-                    }
+                    ToolCall(
+                        id=block.get("id"),
+                        type="function",
+                        function=FunctionCall(
+                            name=block.get("name"),
+                            arguments=block.get("input", {}),
+                        ),
+                    )
                 )
 
         return LLMResponse(

@@ -9,7 +9,7 @@ This tool allows the agent to:
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from .base import Tool, ToolResult
 
@@ -50,7 +50,7 @@ class SessionNoteTool(Tool):
         )
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -149,7 +149,7 @@ class RecallNoteTool(Tool):
         )
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {

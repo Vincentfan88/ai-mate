@@ -3,7 +3,9 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
+from .schema import Message, ToolCall
 
 
 class AgentLogger:
@@ -38,12 +40,12 @@ class AgentLogger:
             f.write(f"Agent Run Log - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
 
-    def log_request(self, messages: list, tools: list = None):
+    def log_request(self, messages: list[Message], tools: list[dict[str, Any]] | None = None):
         """Log LLM request
 
         Args:
             messages: Message list
-            tools: Tool list (optional)
+            tools: Tool schema list (optional)
         """
         self.log_index += 1
 
@@ -62,7 +64,7 @@ class AgentLogger:
             if msg.thinking:
                 msg_dict["thinking"] = msg.thinking
             if msg.tool_calls:
-                msg_dict["tool_calls"] = msg.tool_calls
+                msg_dict["tool_calls"] = [tc.model_dump() for tc in msg.tool_calls]
             if msg.tool_call_id:
                 msg_dict["tool_call_id"] = msg.tool_call_id
             if msg.name:
@@ -72,9 +74,7 @@ class AgentLogger:
 
         # Only record tool names
         if tools:
-            request_data["tools"] = [
-                tool.get("function", {}).get("name", "unknown") for tool in tools
-            ]
+            request_data["tools"] = [tool.get("name", "unknown") for tool in tools]
 
         # Format as JSON
         content = "LLM Request:\n\n"
@@ -85,9 +85,9 @@ class AgentLogger:
     def log_response(
         self,
         content: str,
-        thinking: str = None,
-        tool_calls: list = None,
-        finish_reason: str = None,
+        thinking: str | None = None,
+        tool_calls: list[ToolCall] | None = None,
+        finish_reason: str | None = None,
     ):
         """Log LLM response
 
@@ -108,7 +108,7 @@ class AgentLogger:
             response_data["thinking"] = thinking
 
         if tool_calls:
-            response_data["tool_calls"] = tool_calls
+            response_data["tool_calls"] = [tc.model_dump() for tc in tool_calls]
 
         if finish_reason:
             response_data["finish_reason"] = finish_reason
@@ -122,10 +122,10 @@ class AgentLogger:
     def log_tool_result(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         result_success: bool,
-        result_content: str = None,
-        result_error: str = None,
+        result_content: str | None = None,
+        result_error: str | None = None,
     ):
         """Log tool execution result
 
@@ -169,9 +169,7 @@ class AgentLogger:
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write("\n" + "-" * 80 + "\n")
             f.write(f"[{self.log_index}] {log_type}\n")
-            f.write(
-                f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}\n"
-            )
+            f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}\n")
             f.write("-" * 80 + "\n")
             f.write(content + "\n")
 

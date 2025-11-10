@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from mini_agent.llm import LLMClient, Message
+from mini_agent.llm import LLMClient
+from mini_agent.schema import Message
 
 
 @pytest.mark.asyncio
