@@ -157,8 +157,16 @@ uv sync
 git submodule update --init --recursive
 
 # 5. 复制配置模板
-cp mini_agent/config/config-example.yaml mini_agent/config/config.yaml  # macOS/Linux
-Copy-Item mini_agent\config\config-example.yaml mini_agent\config\config.yaml  # Windows
+```
+
+**macOS/Linux:**
+```bash
+cp mini_agent/config/config-example.yaml mini_agent/config/config.yaml
+```
+
+**Windows:**
+```powershell
+Copy-Item mini_agent\config\config-example.yaml mini_agent\config\config.yaml
 
 # 6. 编辑配置文件
 vim mini_agent/config/config.yaml  # 或使用您偏好的编辑器
