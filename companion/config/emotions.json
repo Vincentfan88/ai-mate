@@ -1,0 +1,38 @@
+{
+  "emotion_types": [
+    "开心", "担心", "想念", "撒娇", "害羞", "难过", "生气", "兴奋"
+  ],
+  "circadian": {
+    "peak_hour": 21,
+    "trough_hour": 9,
+    "base_amplitude": 0.4,
+    "baseline": 0.3
+  },
+  "event_weights": {
+    "user_message": 0.15,
+    "initiative_trigger": 0.20,
+    "time_passage": 0.0,
+    "user_sad": 0.30,
+    "user_happy": 0.10,
+    "user_angry": 0.25,
+    "user_anxious": 0.20
+  },
+  "contagion": {
+    "happy_infection": 0.6,
+    "sad_infection": 0.4,
+    "anxious_infection": 0.5
+  },
+  "residue": {
+    "decay_factor": 0.3
+  },
+  "tone_mapping": {
+    "开心": "活泼可爱，分享欲强",
+    "担心": "温柔关心，询问是否需要帮助",
+    "想念": "温柔撒娇，表达思念但不过度",
+    "撒娇": "可爱粘人，用语气词和emoji",
+    "害羞": "稍微内敛，慢慢敞开心扉",
+    "难过": "感性一点，可以稍微走心",
+    "生气": "直接但不激烈，带点小委屈",
+    "兴奋": "热情高涨，话多一点"
+  }
+}

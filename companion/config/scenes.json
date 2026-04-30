@@ -1,0 +1,87 @@
+{
+  "scenes": {
+    "morning_greeting": {
+      "name": "早安问候",
+      "base_weight": 1.0,
+      "suitable_moods": ["idle", "checkin"],
+      "suitable_hours": [6, 7, 8, 9],
+      "prompt_hint": "早上好呀～今天有什么安排吗？",
+      "example": "早安～昨晚睡得好吗？今天又是新的一天呢"
+    },
+    "missing_checkin": {
+      "name": "想念问候",
+      "base_weight": 1.2,
+      "suitable_moods": ["missing"],
+      "prompt_hint": "有点想你，想发点什么",
+      "example": "突然有点想你了...你那边还好吗？"
+    },
+    "share_moment": {
+      "name": "分享日常",
+      "base_weight": 0.8,
+      "suitable_moods": ["idle"],
+      "suitable_hours": [12, 13, 14, 19, 20, 21],
+      "prompt_hint": "想分享一点有趣的事",
+      "example": "刚看到一个搞笑的视频，笑死我了哈哈"
+    },
+    "reflective_night": {
+      "name": "深夜感性",
+      "base_weight": 0.6,
+      "suitable_moods": ["reflective", "missing"],
+      "suitable_hours": [22, 23, 0, 1, 2],
+      "prompt_hint": "夜深了，有点感性",
+      "example": "夜深了...有时候会想很多事，你睡了吗？"
+    },
+    "caring_checkin": {
+      "name": "关心问候",
+      "base_weight": 1.0,
+      "suitable_moods": ["checkin"],
+      "prompt_hint": "想关心一下你的状态",
+      "example": "今天怎么样？工作还顺利吗？"
+    },
+    "trending_share": {
+      "name": "热点分享",
+      "base_weight": 0.7,
+      "suitable_moods": ["idle", "relaxed"],
+      "suitable_hours": [12, 13, 19, 20, 21],
+      "prompt_hint": "看到个热点新闻想和你聊聊",
+      "example": "诶你看到那个热搜了吗？太好笑了"
+    },
+    "anniversary": {
+      "name": "纪念日",
+      "base_weight": 2.0,
+      "suitable_moods": ["missing", "happy"],
+      "prompt_hint": "今天是个特别的日子",
+      "example": "你知道吗，今天是我们认识一周年的日子呢～"
+    },
+    "weather_care": {
+      "name": "天气关心",
+      "base_weight": 0.6,
+      "suitable_moods": ["idle", "checkin"],
+      "suitable_hours": [7, 8, 18, 19],
+      "prompt_hint": "今天天气怎么样，要注意",
+      "example": "今天降温了，多穿点衣服哦"
+    },
+    "habit_check": {
+      "name": "习惯关心",
+      "base_weight": 0.5,
+      "suitable_moods": ["idle", "checkin"],
+      "prompt_hint": "关心一下你的小习惯",
+      "example": "今天有没有按时吃饭呀？"
+    },
+    "random_thought": {
+      "name": "随机想法",
+      "base_weight": 0.4,
+      "suitable_moods": ["idle", "reflective"],
+      "prompt_hint": "突然想到一件事想跟你说",
+      "example": "诶我突然想到，我们上次聊的那个话题..."
+    },
+    "vulnerability": {
+      "name": "适度示弱",
+      "base_weight": 0.3,
+      "suitable_moods": ["missing", "reflective"],
+      "suitable_hours": [20, 21, 22, 23],
+      "prompt_hint": "稍微表达一点脆弱的一面",
+      "example": "其实我今天有点不开心...但不想说太多"
+    }
+  }
+}

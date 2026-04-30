@@ -1,0 +1,28 @@
+{
+  "weibull": {
+    "alpha": 1.5,
+    "beta": 12.0
+  },
+  "hard_filter": {
+    "quiet_hours": [0, 6],
+    "min_interval_hours": 4,
+    "max_daily_contacts": 3,
+    "externally_accessible": true
+  },
+  "states": {
+    "idle": {"weight": 0.35},
+    "missing": {"weight": 0.15, "cooldown_hours": 2},
+    "active": {"weight": 0.05}
+  },
+  "hour_bonus": {
+    "morning": 0.15,
+    "noon": 0.25,
+    "evening": 0.45,
+    "night": 0.30
+  },
+  "impulse": {
+    "threshold_low": 0.25,
+    "threshold_high": 0.55,
+    "weight": 0.3
+  }
+}
