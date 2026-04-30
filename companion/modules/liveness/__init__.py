@@ -1,56 +1,322 @@
-"""活人感维度模块 — 8 维度量化。"""
+"""
+活人感八维度计算模块 — 从真实互动数据中推导维度值。
+"""
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+import json
+from pathlib import Path
 
 
 @dataclass
-class LivenessMetrics:
-    """活人感 8 维度"""
-    主动性: float = 0.5      # 主动联系频率
-    一致性: float = 0.5      # 性格/记忆一致性
-    成长性: float = 0.5      # 关系成长弧线
-    情绪化: float = 0.5      # 情绪表达丰富度
-    脆弱性: float = 0.5      # 适度脆弱表达
-    身体存在感: float = 0.5  # 身体感/存在感描写
-    不可预测性: float = 0.5  # 非模板化回复
-    依恋度: float = 0.5      # 情感依恋程度
-
-    def to_dict(self) -> Dict[str, float]:
-        return {
-            "主动性": self.主动性,
-            "一致性": self.一致性,
-            "成长性": self.成长性,
-            "情绪化": self.情绪化,
-            "脆弱性": self.脆弱性,
-            "身体存在感": self.身体存在感,
-            "不可预测性": self.不可预测性,
-            "依恋度": self.依恋度,
-        }
-
-    def overall_score(self) -> float:
-        return sum(self.to_dict().values()) / 8
+class LivenessScore:
+    """活人感指标快照"""
+    timestamp: str
+    dimension_scores: Dict[str, float]
+    overall_score: float
+    sample_count: int
 
 
 class LivenessTracker:
-    """活人感追踪器"""
+    """活人感八维度追踪器 — 从消息/互动中计算真实维度值。"""
 
-    def __init__(self):
-        self.metrics = LivenessMetrics()
-        self.history: List[LivenessMetrics] = []
+    DIMENSION_KEYS = [
+        "主动性", "一致性", "成长性", "情绪化",
+        "脆弱性", "身体存在感", "不可预测性", "依恋度"
+    ]
 
-    def update(self, **kwargs):
-        """更新维度值"""
-        for key, value in kwargs.items():
-            if hasattr(self.metrics, key):
-                setattr(self.metrics, key, max(0.0, min(1.0, value)))
+    DIMENSION_KEYS_EN = [
+        "initiative", "consistency", "growth", "emotional",
+        "vulnerability", "physical_presence", "unpredictability", "attachment"
+    ]
 
-    def snapshot(self):
-        """保存当前快照"""
-        self.history.append(LivenessMetrics(**self.metrics.to_dict()))
+    def __init__(self, data_path: str = "workspace/companion/liveness.json"):
+        self.data_path = Path(data_path)
+        self.data_path.parent.mkdir(parents=True, exist_ok=True)
+        self.metrics_history: List[LivenessScore] = []
+        self.week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+        self.current_session: Dict = {
+            "initiated_contacts": 0,
+            "total_contacts": 0,
+            "emotions_expressed": [],
+            "vulnerability_count": 0,
+            "physical_references": 0,
+            "unpredictable_responses": 0,
+            "user_references": 0,
+            "total_messages": 0,
+            "contradictions_detected": 0,
+            "inferences_made": 0,
+            "impulsive_triggers": 0,
+        }
+        # 关系阶段影响
+        self.relationship_level = 0
+        self.learned_topics: List[str] = []
+        self._load_history()
 
-    def get_metrics(self) -> LivenessMetrics:
-        return self.metrics
+    def _load_history(self):
+        """加载历史指标"""
+        if self.data_path.exists():
+            try:
+                data = json.loads(self.data_path.read_text())
+                self.metrics_history = [
+                    LivenessScore(**m) for m in data.get("history", [])
+                ]
+            except Exception:
+                pass
+
+    def _save_history(self):
+        """保存历史指标"""
+        try:
+            data = {
+                "history": [
+                    {"timestamp": m.timestamp, "dimension_scores": m.dimension_scores,
+                     "overall_score": m.overall_score, "sample_count": m.sample_count}
+                    for m in self.metrics_history[-100:]
+                ]
+            }
+            self.data_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        except Exception:
+            pass
+
+    # -------------------- 记录方法 --------------------
+
+    def record_initiated_contact(self):
+        """记录主动联系"""
+        self.current_session["initiated_contacts"] += 1
+        self.current_session["total_contacts"] += 1
+
+    def record_response(self, content: str, context: dict = None):
+        """记录一次回复，分析各维度"""
+        self.current_session["total_messages"] += 1
+        self.current_session["total_contacts"] += 1
+        text = content.lower()
+
+        # 情绪表达
+        emotions = self._detect_emotions(text)
+        self.current_session["emotions_expressed"].extend(emotions)
+
+        # 身体存在感
+        physical_words = [
+            "抱", "靠", "坐", "躺", "站", "走", "手", "脸", "眼", "头", "肩",
+            "呼吸", "心跳", "温度", "靠在你", "靠过来", "伸手", "握住",
+        ]
+        if any(w in text for w in physical_words):
+            self.current_session["physical_references"] += 1
+
+        # 用户引用
+        user_words = ["你", "亲爱的", "宝贝", "傻瓜", "笨蛋"]
+        if any(w in text for w in user_words):
+            self.current_session["user_references"] += 1
+
+        # 脆弱性表达
+        vuln_words = [
+            "有点累", "想你了", "不太舒服", "撒娇", "委屈", "孤单",
+            "寂寞", "无聊", "睡不着", "难过", "心累", "困", "有点难过",
+            "今天不开心", "心情不好", "有点失落",
+        ]
+        if any(w in text for w in vuln_words):
+            self.current_session["vulnerability_count"] += 1
+
+        # 不可预测性
+        unpredict_markers = ["咦", "啊", "诶", "哇", "哎呀", "嗯？", "哈？",
+                             "真的吗", "等等", "话说", "其实", "对了", "突然"]
+        if any(m in text for m in unpredict_markers):
+            self.current_session["unpredictable_responses"] += 1
+
+    def record_contradiction(self, found: bool = True):
+        """记录矛盾检测"""
+        if found:
+            self.current_session["contradictions_detected"] += 1
+
+    def record_inference(self):
+        """记录推断"""
+        self.current_session["inferences_made"] += 1
+
+    def record_impulsive_trigger(self):
+        """记录冲动触发"""
+        self.current_session["impulsive_triggers"] += 1
+
+    def learn_topic(self, topic: str):
+        """学习新话题"""
+        if topic not in self.learned_topics:
+            self.learned_topics.append(topic)
+
+    def _detect_emotions(self, text: str) -> List[str]:
+        """检测文本中的情绪"""
+        emotion_map = {
+            "开心": ["开心", "高兴", "快乐", "太好了", "哈哈", "嘻嘻", "笑死"],
+            "担心": ["担心", "怕", "紧张", "怕你"],
+            "想念": ["想", "思念", "好久不见", "想你", "念你"],
+            "撒娇": ["嗯~", "嘛~", "好不好嘛", "哼", "啦", "哟"],
+            "害羞": ["害羞", "脸红", "不好意思", "羞"],
+            "难过": ["难过", "伤心", "委屈", "不舒服", "失落"],
+            "生气": ["生气", "气", "讨厌", "哼"],
+            "兴奋": ["兴奋", "太棒了", "哇塞", "好激动"],
+        }
+        detected = []
+        for emotion, keywords in emotion_map.items():
+            if any(kw in text for kw in keywords):
+                detected.append(emotion)
+        return detected
+
+    # -------------------- 得分计算 --------------------
+
+    def calculate_scores(self) -> Dict[str, float]:
+        """计算当前各维度得分"""
+        s = self.current_session
+
+        # 1. 主动性：主动发起 / 总互动
+        total = max(s["total_contacts"], 1)
+        initiative = s["initiated_contacts"] / total
+
+        # 2. 一致性：基于矛盾检测，每次矛盾扣分
+        contradictions = s.get("contradictions_detected", 0)
+        consistency = max(0.0, 1.0 - contradictions * 0.05)
+
+        # 3. 成长性：基于学到的话题和推断
+        growth = self._calculate_growth()
+
+        # 4. 情绪化：基于检测到的情绪种类
+        unique_emotions = len(set(s["emotions_expressed"]))
+        emotional = min(1.0, unique_emotions / 5)  # 5 种以上满分
+
+        # 5. 脆弱性：sigmoid 曲线，2-3 次/周最佳
+        days_this_week = max(0.001, (datetime.now() - self.week_start).total_seconds() / 86400)
+        vuln_rate = s["vulnerability_count"] / days_this_week
+        vulnerability = min(1.0, vuln_rate / (vuln_rate + 2.5))
+
+        # 6. 身体存在感
+        total_msgs = max(s["total_messages"], 1)
+        physical = min(1.0, s["physical_references"] / total_msgs * 3)
+
+        # 7. 不可预测性
+        unpredictability = self._calculate_unpredictability()
+
+        # 8. 依恋度：用户引用频率，30-50% 最佳
+        attachment_rate = s["user_references"] / total_msgs
+        if 0.3 <= attachment_rate <= 0.5:
+            attachment = 0.9 + (attachment_rate - 0.3) * 0.5
+        elif attachment_rate > 0.5:
+            attachment = max(0.7, 1.0 - (attachment_rate - 0.5) * 0.6)
+        else:
+            attachment = max(0.3, attachment_rate * 2)
+
+        return {
+            "主动性": round(initiative, 2),
+            "一致性": round(consistency, 2),
+            "成长性": round(growth, 2),
+            "情绪化": round(emotional, 2),
+            "脆弱性": round(vulnerability, 2),
+            "身体存在感": round(physical, 2),
+            "不可预测性": round(unpredictability, 2),
+            "依恋度": round(attachment, 2),
+        }
+
+    def _calculate_growth(self) -> float:
+        """计算成长性：话题学习 + 推断确认率"""
+        topics = len(self.learned_topics)
+        inferences = self.current_session.get("inferences_made", 0)
+
+        # 基线
+        if topics == 0 and inferences == 0:
+            return 0.5
+
+        # 话题越多越好，10 个话题 = 满分
+        topic_score = min(1.0, 0.3 + topics * 0.07)
+        # 推断也有贡献
+        inference_score = min(1.0, 0.3 + inferences * 0.1)
+
+        return round(topic_score * 0.7 + inference_score * 0.3, 2)
+
+    def _calculate_unpredictability(self) -> float:
+        """计算不可预测性"""
+        s = self.current_session
+        total_msgs = max(s["total_messages"], 1)
+
+        # 显式不可预测表达比例
+        explicit = s.get("unpredictable_responses", 0)
+        explicit_score = min(1.0, explicit / total_msgs * 8)
+
+        # 冲动触发
+        impulsive = s.get("impulsive_triggers", 0)
+        if impulsive == 0:
+            impulse_score = 0.5
+        else:
+            ratio = total_msgs / impulsive
+            impulse_score = 0.8 if 5 <= ratio <= 20 else 0.6
+
+        # 综合
+        unpredictability = explicit_score * 0.5 + impulse_score * 0.3 + 0.3 * 0.2
+        return round(min(0.7, max(0.2, unpredictability)), 2)
+
+    def get_overall_score(self, scores: dict = None) -> float:
+        """计算综合得分"""
+        if scores is None:
+            scores = self.calculate_scores()
+
+        weights = {
+            "主动性": 0.15, "一致性": 0.15, "成长性": 0.10,
+            "情绪化": 0.12, "脆弱性": 0.10, "身体存在感": 0.10,
+            "不可预测性": 0.13, "依恋度": 0.15,
+        }
+        overall = sum(scores.get(k, 0) * w for k, w in weights.items())
+        return round(overall, 2)
+
+    def snapshot(self) -> LivenessScore:
+        """保存快照"""
+        scores = self.calculate_scores()
+        overall = self.get_overall_score(scores)
+        metric = LivenessScore(
+            timestamp=datetime.now().isoformat(),
+            dimension_scores=scores,
+            overall_score=overall,
+            sample_count=self.current_session["total_messages"],
+        )
+        self.metrics_history.append(metric)
+        self._save_history()
+        return metric
+
+    def get_trend(self, dimension: str, last_n: int = 7) -> dict:
+        """获取维度趋势"""
+        recent = self.metrics_history[-last_n:]
+        if len(recent) < 2:
+            return {"direction": "stable", "values": []}
+        values = [m.dimension_scores.get(dimension, 0) for m in recent]
+        diff = values[-1] - values[0]
+        if diff > 0.1:
+            direction = "improving"
+        elif diff < -0.1:
+            direction = "declining"
+        else:
+            direction = "stable"
+        return {"direction": direction, "values": values}
+
+    def get_metrics(self) -> dict:
+        """获取当前所有维度"""
+        return self.calculate_scores()
 
     def get_overall(self) -> float:
-        return self.metrics.overall_score()
+        """获取综合得分"""
+        return self.get_overall_score()
+
+    def get_report(self) -> str:
+        """生成活人感报告"""
+        scores = self.calculate_scores()
+        overall = self.get_overall_score(scores)
+        unique_emotions = len(set(self.current_session["emotions_expressed"]))
+
+        lines = [f"活人感综合得分: {overall:.0%}"]
+        for dim in self.DIMENSION_KEYS:
+            score = scores.get(dim, 0)
+            bar = "█" * int(score * 10) + "░" * (10 - int(score * 10))
+            lines.append(f"  {dim}: {bar} {score:.0%}")
+
+        lines.append(f"  情绪种类: {unique_emotions} 种")
+        lines.append(f"  身体引用: {self.current_session['physical_references']} 次")
+        lines.append(f"  脆弱表达: {self.current_session['vulnerability_count']} 次")
+        return "\n".join(lines)
+
+
+# Alias for backward compatibility
+LivenessMetrics = LivenessScore

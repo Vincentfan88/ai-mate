@@ -19,26 +19,72 @@ class BaseCompanionTool:
 
 
 class StateTool(BaseCompanionTool):
-    """状态查询 Tool — 获取当前情绪/时间/关系阶段"""
+    """状态查询 Tool — 统一状态管理层（情绪/时间/关系/活人感/HMM状态/偏好）"""
 
     name = "companion_state"
-    description = "Get current companion state (emotion, time context, relationship stage)"
+    description = "Get comprehensive companion state (emotion, time, relationship, liveness, HMM state, preferences)"
 
     def run(self, args: dict) -> str:
         registry = self.registry
         if not registry:
             return "Registry not initialized"
 
+        from datetime import datetime
         from companion.modules.extras import TimeContext
+
+        # 基础状态
         emotion = registry.emotion.get_current_emotion("time_passage")
         ctx = TimeContext.from_now()
-        stage = registry.relationship.get_stage(registry.relationship_level)
+        stage = registry.relationship.get_current_stage()
+        hours = ctx.hour
 
-        return (
-            f"当前情绪: {emotion['emotion']} (强度: {emotion['intensity']})\n"
-            f"时间: {ctx.time_description}\n"
-            f"关系阶段: {stage.name_cn} ({stage.name})"
+        # 活人感
+        liveness_scores = registry.liveness.calculate_scores()
+        liveness_overall = registry.liveness.get_overall_score(liveness_scores)
+
+        # HMM 状态
+        hmm_state = registry.trigger.hmm.current_state if hasattr(registry.trigger, 'hmm') else "unknown"
+
+        # 偏好推断
+        beliefs = registry.memory.preference.get_active_beliefs(limit=3)
+        belief_texts = [f"- {b.content} ({b.trust_score:.0%})" for b in beliefs] if beliefs else ["暂无"]
+
+        # 关系统计
+        rel_stats = registry.relationship.get_stats()
+        days = registry.relationship.get_days_together()
+
+        # 场景加权（含关系乘数）
+        scenes = registry.scenes.get_suitable_scenes(
+            hour=hours,
+            mood=hmm_state,
+            relationship_multiplier_fn=registry.relationship.get_scene_multiplier,
+            top_k=3,
         )
+        scene_texts = [f"- {s.name} (权重: {score})" for s, score in scenes] if scenes else ["暂无合适场景"]
+
+        # MBTI 画像
+        profile = registry.mbti.get_profile(registry.mbti_type)
+
+        lines = [
+            "=== 当前状态 ===",
+            f"时间: {ctx.time_description}",
+            f"HMM 状态: {hmm_state}",
+            f"情绪: {emotion['emotion']} (强度: {emotion['intensity']})",
+            f"关系: {stage.name_cn} (Lv.{stage.level}) — 在一起 {days} 天",
+            f"  互动: {rel_stats['interactions']} 次 | 情绪深度: {rel_stats['emotional_depth']:.2f}",
+            f"活人感: {liveness_overall:.0%}",
+            f"  主动性: {liveness_scores.get('主动性', 0):.0%} | 一致性: {liveness_scores.get('一致性', 0):.0%}",
+            f"  成长性: {liveness_scores.get('成长性', 0):.0%} | 情绪化: {liveness_scores.get('情绪化', 0):.0%}",
+            f"  脆弱性: {liveness_scores.get('脆弱性', 0):.0%} | 身体存在感: {liveness_scores.get('身体存在感', 0):.0%}",
+            f"  不可预测性: {liveness_scores.get('不可预测性', 0):.0%} | 依恋度: {liveness_scores.get('依恋度', 0):.0%}",
+            f"MBTI: {profile.type.code} ({profile.type.nickname})",
+            f"  风格: {profile.speech.tone_keywords}",
+            f"偏好推断:",
+            *belief_texts,
+            f"场景 (含关系乘数):",
+            *scene_texts,
+        ]
+        return "\n".join(lines)
 
 
 class MemoryTool(BaseCompanionTool):
@@ -160,11 +206,16 @@ class SceneTool(BaseCompanionTool):
         hour = args.get("hour", datetime.now().hour)
         mood = args.get("mood", "idle")
 
-        scenes = registry.scenes.get_suitable_scenes(hour, mood)
+        scenes = registry.scenes.get_suitable_scenes(
+            hour=hour,
+            mood=mood,
+            relationship_multiplier_fn=registry.relationship.get_scene_multiplier,
+            top_k=5,
+        )
         if not scenes:
             return f"当前时间和心情没有特别合适的场景"
 
-        lines = [f"- {s.name}: {s.prompt_hint}" for s in scenes[:5]]
+        lines = [f"- {s.name}: {s.prompt_hint} (权重: {score:.2f})" for s, score in scenes[:5]]
         return f"合适的场景:\n" + "\n".join(lines)
 
 

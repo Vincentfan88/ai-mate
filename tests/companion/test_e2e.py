@@ -85,13 +85,13 @@ class TestEndToEnd:
 
     def test_relationship_progression(self, registry):
         """Test: enough interactions → can progress to next stage."""
-        # At level 0, need 50+ interactions, 0.5 depth, 30 memories for acquaintance
-        assert registry.relationship.can_progress(
-            current_level=0,
-            interactions=55,
-            emotional_depth=0.6,
-            memory_count=35,
-        )
+        # At level 0, need 50 interactions, 0.5 depth, 30 memories for acquaintance
+        rel = registry.relationship
+        rel.current_level = 0  # Reset to level 0 for test
+        rel.interaction_count = 50
+        rel.emotional_depth = 0.5
+        rel.memory_count = 30
+        assert rel.check_progress() is True
 
     def test_all_tools_work(self, registry):
         """Test: all tool adapters return valid responses."""
@@ -148,12 +148,11 @@ class TestEndToEnd:
 
     def test_liveness_tracking(self, registry):
         """Test: liveness metrics are tracked throughout."""
-        registry.liveness.update(主动性=0.8, 情绪化=0.7)
+        registry.liveness.record_initiated_contact()
         registry.liveness.snapshot()
 
-        metrics = registry.liveness.get_metrics()
-        assert metrics.主动性 == 0.8
-        assert metrics.情绪化 == 0.7
+        metrics = registry.liveness.calculate_scores()
+        assert metrics["主动性"] == 1.0
 
     def test_trending_integration(self, registry):
         """Test: trending cache works end-to-end."""

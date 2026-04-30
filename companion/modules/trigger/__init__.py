@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 from .weibull import weibull_sample, compute_hour_bonus
-from .hmm_state_machine import HMMState, HMMStateMachine
+from .hmm_state_machine import CompanionState, HMMStateMachine
+HMMState = CompanionState  # alias
 from .hard_filter import HardFilter
 
 

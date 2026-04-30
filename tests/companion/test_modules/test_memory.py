@@ -126,7 +126,9 @@ class TestPreferenceInfer:
             pref = PreferenceInfer(store)
             result = pref.infer()
             assert len(result["inferences"]) > 0
-            assert "用户偏好" in result["inferences"][0]
+            # New format: natural language beliefs with percentages
+            first = result["inferences"][0]
+            assert "喜欢" in first or "压力" in first or "跑步" in first
 
     def test_negation_exclusion(self):
         """否定词不应被误判为偏好"""

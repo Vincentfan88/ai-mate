@@ -64,8 +64,8 @@ class TestTools:
             reg = make_registry(tmpdir)
             tool = StateTool(reg)
             result = tool.run({})
-            assert "当前情绪" in result
-            assert "关系阶段" in result
+            assert "情绪" in result
+            assert "关系" in result
 
     def test_memory_tool_record(self):
         with tempfile.TemporaryDirectory() as tmpdir:
