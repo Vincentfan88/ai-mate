@@ -37,7 +37,7 @@ class TestEndToEnd:
         """Test: user message → memory record → emotion update → response."""
         # 1. Record user message in memory
         registry.memory.record("用户说今天工作顺利")
-        registry.memory.add_interaction("user", "今天工作顺利")
+        registry.memory.add_conversation("user", "今天工作顺利")
 
         # 2. Check emotion
         emotion = registry.emotion.get_current_emotion("user_message")
@@ -66,7 +66,7 @@ class TestEndToEnd:
     def test_memory_contagion_flow(self, registry):
         """Test: user sad → emotion contagion → different response."""
         # User sends sad message
-        registry.memory.add_interaction("user", "今天心情不好")
+        registry.memory.add_conversation("user", "今天心情不好")
         emotion = registry.emotion.get_current_emotion(
             "user_message", user_emotion="难过"
         )

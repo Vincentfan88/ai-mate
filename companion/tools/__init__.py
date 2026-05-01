@@ -88,7 +88,7 @@ class StateTool(BaseCompanionTool):
 
 
 class MemoryTool(BaseCompanionTool):
-    """记忆操作 Tool — 记录/搜索/推断偏好"""
+    """记忆操作 Tool — 记录/搜索/推断偏好/对话管理"""
 
     name = "companion_memory"
     description = "Record or search companion memories"
@@ -103,7 +103,8 @@ class MemoryTool(BaseCompanionTool):
             content = args.get("content", "")
             if not content:
                 return "Error: content is required"
-            registry.memory.record(content)
+            importance = args.get("importance")
+            registry.memory.record(content, importance)
             return f"已记录: {content}"
         elif action == "search":
             query = args.get("query", "")
@@ -118,6 +119,13 @@ class MemoryTool(BaseCompanionTool):
             if not inferences:
                 return "还没有足够的信息推断偏好"
             return "\n".join(inferences)
+        elif action == "recent":
+            limit = args.get("limit", 3)
+            recent = registry.memory.get_recent_conversations(limit)
+            if not recent:
+                return "暂无最近对话"
+            lines = [f"- [{r.get('role', '?')}] {r['content']}" for r in recent]
+            return f"最近 {len(recent)} 轮对话:\n" + "\n".join(lines)
         else:
             return f"Unknown action: {action}"
 

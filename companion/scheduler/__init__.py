@@ -97,10 +97,11 @@ class WebhookListener:
         # Enrich with context
         message["received_at"] = datetime.now().isoformat()
 
-        # Record interaction
-        self.registry.memory.add_interaction(
+        # Record interaction (new API)
+        self.registry.memory.add_conversation(
             role="user",
             content=message.get("content", ""),
+            timestamp=message["received_at"],
         )
 
         # Update HMM state

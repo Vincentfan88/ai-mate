@@ -33,7 +33,8 @@ class CompanionRegistry:
     @property
     def memory(self) -> MemorySystem:
         return self._get_or_create("memory", lambda: MemorySystem(
-            store_path=f"{self.workspace}/memory_store.json"
+            workspace=self.workspace,
+            persona_path=f"{self.config_dir}/../skills/companion/default.json",
         ))
 
     @property
