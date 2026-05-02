@@ -74,15 +74,21 @@ class ProactiveLoop:
         """检查是否应该触发主动联系"""
         decision = self.registry.trigger.compute()
         if decision.should_trigger and self.on_trigger:
-            self.on_trigger({
+            event = {
                 "type": "proactive_contact",
                 "decision": {
                     "pull": decision.pull,
+                    "hold_back": decision.hold_back,
                     "nudge": decision.nudge,
                     "state": decision.state,
                 },
                 "timestamp": datetime.now().isoformat(),
-            })
+            }
+            # 支持同步和异步回调
+            if asyncio.iscoroutinefunction(self.on_trigger):
+                await self.on_trigger(event)
+            else:
+                self.on_trigger(event)
 
     def stop(self):
         self._running = False

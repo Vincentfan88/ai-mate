@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import io
 import json
+import logging
 import struct
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -15,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from companion.cli import build_companion_agent
 from companion.webui.agent_wrapper import SilentAgentWrapper
 from companion.modules.feishu.bot import FeishuBot
+
+logger = logging.getLogger("companion")
 
 # ── 全局状态 ──────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
@@ -36,6 +39,7 @@ _config = {
     # 飞书
     "feishu_app_id": "",
     "feishu_app_secret": "",
+    "feishu_chat_id": "",
     "feishu_enabled": False,
 }
 
@@ -173,7 +177,7 @@ async def _on_proactive_trigger(event: dict) -> None:
         if response and not response.startswith("LLM call failed"):
             # 通过飞书发送
             if _feishu_bot and _feishu_bot.is_connected:
-                default_chat_id = _config.get("feishu_default_chat_id", "")
+                default_chat_id = _config.get("feishu_chat_id", "")
                 if default_chat_id:
                     await _feishu_bot._send_reply(default_chat_id, response)
             # 广播到 WebUI
@@ -455,7 +459,7 @@ async def update_config(body: dict):
 
     # 处理飞书配置变更
     feishu_changed = False
-    for k in ("feishu_app_id", "feishu_app_secret", "feishu_enabled"):
+    for k in ("feishu_app_id", "feishu_app_secret", "feishu_chat_id", "feishu_enabled"):
         if k in body:
             _config[k] = body[k]
             feishu_changed = True

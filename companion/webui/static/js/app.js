@@ -8,7 +8,10 @@ let messages = [];
 // ── DOM refs ──
 const $ = (s) => document.querySelector(s);
 const chatView = document.getElementById('chatView');
-const settingsView = document.getElementById('settingsView');
+const settingsPersonaView = document.getElementById('settingsPersonaView');
+const settingsModelView = document.getElementById('settingsModelView');
+const settingsImView = document.getElementById('settingsImView');
+const aboutView = document.getElementById('aboutView');
 const msgContainer = document.getElementById('messages');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -28,12 +31,16 @@ async function init() {
 function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   chatView.classList.toggle('hidden', view !== 'chat');
-  settingsView.classList.toggle('active', view === 'settings');
+  settingsPersonaView.classList.toggle('active', view === 'settings-persona');
+  settingsModelView.classList.toggle('active', view === 'settings-model');
+  settingsImView.classList.toggle('active', view === 'settings-im');
+  aboutView.classList.toggle('active', view === 'about');
 
-  if (view === 'settings') {
+  if (view === 'settings-persona' || view === 'settings-model' || view === 'settings-im') {
     loadSettingsForm();
+  }
+  if (view === 'settings-im') {
     pollFeishuStatus();
-    // 每 10 秒轮询飞书状态
     if (window._feishuPollTimer) clearInterval(window._feishuPollTimer);
     window._feishuPollTimer = setInterval(pollFeishuStatus, 10000);
   } else {
@@ -69,7 +76,7 @@ async function loadPersonas() {
   }
 }
 
-async function saveSettings() {
+async function saveAllSettings() {
   const body = {
     persona: document.getElementById('selPersona').value,
     mbti: document.getElementById('selMbti').value,
@@ -82,6 +89,7 @@ async function saveSettings() {
     feishu_enabled: document.getElementById('feishuToggle').checked,
     feishu_app_id: document.getElementById('feishuAppId').value || '',
     feishu_app_secret: document.getElementById('feishuAppSecret').value || '',
+    feishu_chat_id: document.getElementById('feishuChatId').value || '',
   };
 
   try {
@@ -93,7 +101,6 @@ async function saveSettings() {
     const data = await res.json();
     if (data.status === 'ok') {
       showToast('设置已保存，重新连接中…');
-      // 重建 WebSocket 连接（触发 agent 重建）
       ws?.close();
       setTimeout(() => connectWebSocket(), 300);
       switchView('chat');
@@ -159,11 +166,9 @@ async function importCharacter() {
     const data = await res.json();
     showToast(`✅ 角色 "${data.persona.label}" 导入成功`);
 
-    // 刷新人格列表并自动选中新导入的角色
     await loadPersonas();
     document.getElementById('selPersona').value = data.persona.name;
 
-    // 清空文件选择
     fileInput.value = '';
     document.getElementById('fileName').textContent = '未选择文件';
   } catch (e) {
@@ -264,6 +269,7 @@ async function loadSettingsForm() {
   document.getElementById('feishuToggle').checked = currentConfig.feishu_enabled || false;
   document.getElementById('feishuAppId').value = currentConfig.feishu_app_id || '';
   document.getElementById('feishuAppSecret').value = currentConfig.feishu_app_secret || '';
+  document.getElementById('feishuChatId').value = currentConfig.feishu_chat_id || '';
   updateFeishuStatus(currentConfig.feishu_connected || false);
 
   // 加载头像预览
@@ -305,6 +311,10 @@ function connectWebSocket() {
       case 'status':
         if (data.content === 'thinking') showTyping();
         break;
+      case 'proactive':
+        hideTyping();
+        addMessage(data.content, 'ai');
+        break;
       case 'error':
         hideTyping();
         addMessage('😅 ' + data.content, 'ai');
@@ -315,7 +325,6 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     setOnline(false);
-    // 自动重连
     setTimeout(connectWebSocket, 2000);
   };
 
@@ -374,7 +383,6 @@ function addMessage(text, role) {
 }
 
 function addSystemMessage(text) {
-  // 系统消息显示在 AI bubble 里
   addMessage(text, 'ai');
 }
 
