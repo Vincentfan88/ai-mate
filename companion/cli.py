@@ -165,7 +165,8 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
             print("✅ 情绪残留已保存")
             continue
 
-        # 将用户消息交给 Agent 处理
+        # 将用户消息持久化
+        registry.memory.add_conversation("user", user_input)
         agent.add_user_message(user_input)
 
         try:
@@ -173,6 +174,8 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
             result = await agent.run()
             elapsed = time.perf_counter() - start
             if result:
+                # 持久化 AI 回复
+                registry.memory.add_conversation("assistant", result)
                 print(f"\n💕 {name} [{elapsed:.1f}s]:")
                 print(f"  {result}")
         except Exception as e:
