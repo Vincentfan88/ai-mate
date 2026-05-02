@@ -8,11 +8,17 @@
 </head>
 <body>
   <div class="app">
+    <!-- Mobile hamburger -->
+    <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <h1>💕 AI 伴侣</h1>
-        <div class="subtitle">v2.0 · 端到端集成</div>
+        <h1>AI 伴侣</h1>
+        <div class="subtitle">v2.0 · 暖暮配色</div>
       </div>
       <nav class="sidebar-nav">
         <button class="nav-item active" data-view="chat" onclick="switchView('chat')">
@@ -35,7 +41,20 @@
           <div class="status-dot" id="statusDot"></div>
           <span class="status-text" id="statusText">在线 · ENFP</span>
         </div>
-        <div class="messages" id="messages"></div>
+
+        <!-- Welcome screen (shown when no messages) -->
+        <div class="welcome-screen" id="welcomeScreen">
+          <div class="welcome-icon">🌙</div>
+          <h2 id="welcomeTitle">你好呀</h2>
+          <p id="welcomeText">我是你的 AI 伴侣，有活人感的那种。想聊什么都可以～</p>
+          <div class="welcome-suggestions">
+            <button class="suggestion-btn" onclick="sendSuggestion('今天过得怎么样？')">今天过得怎么样？</button>
+            <button class="suggestion-btn" onclick="sendSuggestion('给我讲个有趣的事吧')">给我讲个有趣的事吧</button>
+            <button class="suggestion-btn" onclick="sendSuggestion('你在想什么呢？')">你在想什么呢？</button>
+          </div>
+        </div>
+
+        <div class="messages" id="messages" style="display:none"></div>
         <div class="input-area">
           <div class="input-row">
             <textarea id="chatInput" rows="1" placeholder="输入消息..."

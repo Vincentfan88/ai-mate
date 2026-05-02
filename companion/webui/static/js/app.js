@@ -4,6 +4,7 @@
 let ws = null;
 let currentConfig = {};
 let messages = [];
+let messageCount = 0;
 
 // ── DOM refs ──
 const $ = (s) => document.querySelector(s);
@@ -15,14 +16,38 @@ const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 const statusText = document.getElementById('statusText');
 const statusDot = document.getElementById('statusDot');
+const welcomeScreen = document.getElementById('welcomeScreen');
 
 // ── Init ──
 async function init() {
   await loadConfig();
   await loadPersonas();
+  updateWelcomeText();
   connectWebSocket();
-  addSystemMessage('你好呀～ 我是小美，你的 AI 伴侣。有什么想聊的吗？💕');
   chatInput.focus();
+}
+
+function updateWelcomeText() {
+  const name = currentConfig.persona || 'default';
+  const personas = {
+    'default': { title: '你好呀', text: '我是你的 AI 伴侣，有活人感的那种。想聊什么都可以～' },
+  };
+  const info = personas[name] || personas['default'];
+  document.getElementById('welcomeTitle').textContent = info.title;
+  document.getElementById('welcomeText').textContent = info.text;
+}
+
+// ── Mobile sidebar ──
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('show');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
 }
 
 // ── View Switching ──
@@ -46,6 +71,9 @@ function switchView(view) {
   }
 
   if (view === 'chat') setTimeout(() => chatInput.focus(), 100);
+
+  // Close mobile sidebar on navigation
+  closeSidebar();
 }
 
 // ── Tab Switching ──
@@ -247,7 +275,7 @@ async function importCharacter() {
     }
 
     const data = await res.json();
-    showToast(`✅ 角色 "${data.persona.label}" 导入成功`);
+    showToast(`角色 "${data.persona.label}" 导入成功`);
 
     await loadPersonas();
     document.getElementById('selPersona').value = data.persona.name;
@@ -367,6 +395,7 @@ function removeBlock(index) {
 function updateBlock(index, field, value) {
   quietBlocks[index][field] = parseInt(value) || 0;
 }
+
 async function loadSettingsForm() {
   await loadConfig();
   document.getElementById('selMbti').value = currentConfig.mbti || 'ENFP';
@@ -468,6 +497,11 @@ function connectWebSocket() {
 }
 
 // ── Chat ──
+function sendSuggestion(text) {
+  chatInput.value = text;
+  sendMessage();
+}
+
 function sendMessage() {
   const text = chatInput.value.trim();
   if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -475,8 +509,12 @@ function sendMessage() {
   chatInput.value = '';
   autoResize(chatInput);
   addMessage(text, 'user');
-  ws.send(JSON.stringify({ message: text }));
+
+  // Set loading state
   sendBtn.disabled = true;
+  sendBtn.classList.add('loading');
+
+  ws.send(JSON.stringify({ message: text }));
 }
 
 function handleKeyDown(e) {
@@ -491,8 +529,34 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
+function hideWelcome() {
+  if (welcomeScreen) {
+    welcomeScreen.style.display = 'none';
+  }
+  if (msgContainer) {
+    msgContainer.style.display = '';
+  }
+}
+
 // ── UI Helpers ──
+function formatTime(date) {
+  const h = date.getHours().toString().padStart(2, '0');
+  const m = date.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function getSenderName(role) {
+  if (role === 'user') {
+    return currentConfig.user_name || '你';
+  }
+  // AI name from config or persona
+  return currentConfig.persona || 'AI';
+}
+
 function addMessage(text, role) {
+  messageCount++;
+  hideWelcome();
+
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
@@ -503,15 +567,30 @@ function addMessage(text, role) {
   if (hasAvatar) {
     avatar.innerHTML = `<img src="/api/avatar/${role}?t=${Date.now()}" class="avatar-img">`;
   } else {
-    avatar.textContent = role === 'ai' ? '🤖' : '👤';
+    avatar.textContent = role === 'ai' ? '🌙' : '👤';
   }
+
+  const content = document.createElement('div');
+  content.className = 'message-content';
+
+  const sender = document.createElement('div');
+  sender.className = 'message-sender';
+  sender.textContent = getSenderName(role);
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   bubble.textContent = text;
 
+  const time = document.createElement('div');
+  time.className = 'message-time';
+  time.textContent = formatTime(new Date());
+
+  content.appendChild(sender);
+  content.appendChild(bubble);
+  content.appendChild(time);
+
   div.appendChild(avatar);
-  div.appendChild(bubble);
+  div.appendChild(content);
   msgContainer.appendChild(div);
   msgContainer.scrollTop = msgContainer.scrollHeight;
 }
@@ -522,6 +601,7 @@ function addSystemMessage(text) {
 
 function showTyping() {
   setOnline(false);
+  hideWelcome();
   let existing = document.getElementById('typing-indicator');
   if (existing) return;
 
@@ -534,15 +614,25 @@ function showTyping() {
   if (currentConfig.has_avatar_ai) {
     avatar.innerHTML = `<img src="/api/avatar/ai?t=${Date.now()}" class="avatar-img">`;
   } else {
-    avatar.textContent = '🤖';
+    avatar.textContent = '🌙';
   }
+
+  const content = document.createElement('div');
+  content.className = 'message-content';
+
+  const sender = document.createElement('div');
+  sender.className = 'message-sender';
+  sender.textContent = getSenderName('ai');
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   bubble.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
 
+  content.appendChild(sender);
+  content.appendChild(bubble);
+
   div.appendChild(avatar);
-  div.appendChild(bubble);
+  div.appendChild(content);
   msgContainer.appendChild(div);
   msgContainer.scrollTop = msgContainer.scrollHeight;
 }
@@ -551,10 +641,12 @@ function hideTyping() {
   const el = document.getElementById('typing-indicator');
   if (el) el.remove();
   sendBtn.disabled = false;
+  sendBtn.classList.remove('loading');
 }
 
 function setOnline(online) {
   statusDot.style.background = online ? '#22c55e' : '#ef4444';
+  statusDot.style.boxShadow = online ? '0 0 6px rgba(34, 197, 94, 0.4)' : 'none';
   statusText.textContent = online ? `在线 · ${currentConfig.mbti || 'ENFP'}` : '思考中…';
 }
 
@@ -674,7 +766,7 @@ async function confirmPersona() {
     await loadPersonas();
     document.getElementById('selPersona').value = data.persona.name;
 
-    showToast(`✅ 角色 "${data.persona.label}" 已创建`);
+    showToast(`角色 "${data.persona.label}" 已创建`);
     switchView('chat');
   } catch (e) {
     showToast('❌ ' + e.message);
@@ -706,7 +798,7 @@ async function deletePersona() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '删除失败');
-    showToast(`✅ 角色 "${name}" 已删除`);
+    showToast(`角色 "${name}" 已删除`);
     await loadPersonas();
     // 保存配置时刷新当前选中
     const config = await fetch('/api/config').then(r => r.json());
