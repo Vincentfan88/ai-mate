@@ -1,11 +1,10 @@
-"""
-活人感八维度计算模块 — 从真实互动数据中推导维度值。
-"""
+"""活人感八维度计算模块 — 从真实互动数据中推导维度值。"""
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import json
+import random
 from pathlib import Path
 
 
@@ -31,11 +30,22 @@ class LivenessTracker:
         "vulnerability", "physical_presence", "unpredictability", "attachment"
     ]
 
+    # 不可预测性：随机昵称
+    NICKNAMES = [
+        "笨蛋", "傻瓜", "亲爱的", "宝贝",
+        "小可爱", "猪猪", "呆子", "我家那位"
+    ]
+
+    # 不可预测性：惊喜模式检测
+    SURPRISE_PATTERNS = [
+        "猜猜", "冷不丁", "突然问", "其实我", "话说", "对了，",
+        "咦", "诶", "哎呀", "哇塞", "突然想起",
+    ]
+
     def __init__(self, data_path: str = "workspace/companion/liveness.json"):
         self.data_path = Path(data_path)
         self.data_path.parent.mkdir(parents=True, exist_ok=True)
         self.metrics_history: List[LivenessScore] = []
-        self.week_start = datetime.now() - timedelta(days=datetime.now().weekday())
         self.current_session: Dict = {
             "initiated_contacts": 0,
             "total_contacts": 0,
@@ -48,11 +58,17 @@ class LivenessTracker:
             "contradictions_detected": 0,
             "inferences_made": 0,
             "impulsive_triggers": 0,
+            "surprise_triggered": False,
+            "nickname_used": "",
         }
-        # 关系阶段影响
-        self.relationship_level = 0
         self.learned_topics: List[str] = []
         self._load_history()
+
+    @property
+    def week_start(self) -> datetime:
+        """本周一日期 — 动态计算，不依赖构造时间"""
+        now = datetime.now()
+        return now - timedelta(days=now.weekday())
 
     def _load_history(self):
         """加载历史指标"""
@@ -87,7 +103,7 @@ class LivenessTracker:
         self.current_session["total_contacts"] += 1
 
     def record_response(self, content: str, context: dict = None):
-        """记录一次回复，分析各维度"""
+        """记录一次回复，分析各维度（含不可预测性检测）"""
         self.current_session["total_messages"] += 1
         self.current_session["total_contacts"] += 1
         text = content.lower()
@@ -118,11 +134,32 @@ class LivenessTracker:
         if any(w in text for w in vuln_words):
             self.current_session["vulnerability_count"] += 1
 
-        # 不可预测性
+        # 不可预测性：显式词汇
         unpredict_markers = ["咦", "啊", "诶", "哇", "哎呀", "嗯？", "哈？",
                              "真的吗", "等等", "话说", "其实", "对了", "突然"]
         if any(m in text for m in unpredict_markers):
             self.current_session["unpredictable_responses"] += 1
+
+        # 不可预测性：惊喜行为模式
+        if any(m in content for m in self.SURPRISE_PATTERNS):
+            self.current_session["surprise_triggered"] = True
+
+    def record_surprise(self):
+        """记录一次惊喜/意外行为（来自外部触发）"""
+        self.current_session["surprise_triggered"] = True
+        self.current_session["unpredictable_responses"] += 1
+
+    def generate_nickname(self, user_name: str = None) -> str:
+        """生成随机昵称（供调用方使用，同时计入不可预测性）"""
+        import hashlib
+        if user_name:
+            seed = int(hashlib.md5(user_name.encode()).hexdigest(), 16)
+            rng = random.Random(seed)
+            chosen = rng.choice(self.NICKNAMES)
+        else:
+            chosen = random.choice(self.NICKNAMES)
+        self.current_session["nickname_used"] = chosen
+        return chosen
 
     def record_contradiction(self, found: bool = True):
         """记录矛盾检测"""
@@ -190,7 +227,7 @@ class LivenessTracker:
         total_msgs = max(s["total_messages"], 1)
         physical = min(1.0, s["physical_references"] / total_msgs * 3)
 
-        # 7. 不可预测性
+        # 7. 不可预测性：综合显式标记 + 惊喜行为 + 昵称
         unpredictability = self._calculate_unpredictability()
 
         # 8. 依恋度：用户引用频率，30-50% 最佳
@@ -230,7 +267,7 @@ class LivenessTracker:
         return round(topic_score * 0.7 + inference_score * 0.3, 2)
 
     def _calculate_unpredictability(self) -> float:
-        """计算不可预测性"""
+        """计算不可预测性 — 整合惊喜/昵称/意外行为"""
         s = self.current_session
         total_msgs = max(s["total_messages"], 1)
 
@@ -246,9 +283,22 @@ class LivenessTracker:
             ratio = total_msgs / impulsive
             impulse_score = 0.8 if 5 <= ratio <= 20 else 0.6
 
-        # 综合
-        unpredictability = explicit_score * 0.5 + impulse_score * 0.3 + 0.3 * 0.2
-        return round(min(0.7, max(0.2, unpredictability)), 2)
+        # 惊喜行为加分
+        surprise_bonus = 0.15 if s.get("surprise_triggered", False) else 0.0
+
+        # 昵称使用加分
+        nickname_bonus = 0.05 if s.get("nickname_used") else 0.0
+
+        # 综合：显式标记 50% + 冲动 30% + 基础分 20% + 惊喜/昵称加分
+        base_score = 0.3  # 基础不可预测性下限
+        unpredictability = (
+            explicit_score * 0.5
+            + impulse_score * 0.3
+            + base_score * 0.2
+            + surprise_bonus
+            + nickname_bonus
+        )
+        return round(min(1.0, max(0.2, unpredictability)), 2)
 
     def get_overall_score(self, scores: dict = None) -> float:
         """计算综合得分"""

@@ -12,7 +12,11 @@
   "states": {
     "idle": {"weight": 0.35},
     "missing": {"weight": 0.15, "cooldown_hours": 2},
-    "active": {"weight": 0.05}
+    "active": {"weight": 0.05},
+    "share": {"weight": 0.20},
+    "checkin": {"weight": 0.25},
+    "reflective": {"weight": 0.10},
+    "playful": {"weight": 0.15}
   },
   "hour_bonus": {
     "morning": 0.15,

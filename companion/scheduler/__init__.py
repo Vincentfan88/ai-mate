@@ -158,8 +158,8 @@ async def start_companion(
     proactive = ProactiveLoop(registry, on_trigger=on_proactive_trigger)
     fetcher = TrendingFetcher(registry)
 
-    # Store webhook handler for external access
-    router._webhook = webhook
+    # Expose webhook handler for external access
+    router.webhook = webhook
 
     async def message_handler(msg: dict):
         logger.info(f"Processing message: {msg.get('content', '')[:50]}")

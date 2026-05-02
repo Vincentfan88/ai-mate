@@ -47,6 +47,14 @@ class MemoryStore(ABC):
         """查找相似事实用于去重"""
 
     @abstractmethod
+    def get_user_facts(self) -> List[dict]:
+        """获取所有用户事实（排除 AI 属性）"""
+
+    @abstractmethod
+    def get_recent_interactions(self, limit: int = 5) -> List[dict]:
+        """获取最近互动记录"""
+
+    @abstractmethod
     def close(self) -> None:
         """清理资源"""
 

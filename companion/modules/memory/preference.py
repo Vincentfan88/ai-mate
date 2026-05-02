@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .fact_store import FactStore
+from .store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ class PreferenceInfer:
     FADING_DAYS = 14
     DISCARD_DAYS = 30
 
-    def __init__(self, fact_store: FactStore, data_path: str = "workspace/companion/preference.json"):
+    def __init__(self, fact_store: MemoryStore, data_path: str = "workspace/companion/preference.json"):
         self.store = fact_store
         self.data_path = Path(data_path)
         self.data_path.parent.mkdir(parents=True, exist_ok=True)

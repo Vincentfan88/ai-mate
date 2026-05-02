@@ -331,7 +331,11 @@ class MBTIAdapter:
     def get_profile(self, mbti_code: str) -> MBTIProfile:
         """获取指定 MBTI 类型的完整画像"""
         if mbti_code not in self._profiles:
-            self._profiles[mbti_code] = self._build_profile(mbti_code)
+            try:
+                self._profiles[mbti_code] = self._build_profile(mbti_code)
+            except ValueError:
+                # 未知类型 fallback 到 ENFP
+                self._profiles[mbti_code] = self._build_profile("ENFP")
         return self._profiles[mbti_code]
 
     def _build_profile(self, mbti_code: str) -> MBTIProfile:

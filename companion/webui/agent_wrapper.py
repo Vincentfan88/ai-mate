@@ -1,0 +1,47 @@
+"""Agent 包装器 — 隐藏 Mini-Agent 的内部输出，只保留最终回复。"""
+import io
+import sys
+import contextlib
+from datetime import datetime
+
+
+class SilentAgentWrapper:
+    """包装 Agent，抑制 thinking/tool_call 等内部输出。
+
+    使用方式:
+        wrapper = SilentAgentWrapper(agent, registry)
+        result = await wrapper.run(message)  # 无干扰输出
+    """
+
+    def __init__(self, agent, registry=None):
+        self._agent = agent
+        self._registry = registry
+
+    @property
+    def agent(self):
+        return self._agent
+
+    @property
+    def registry(self):
+        return self._registry
+
+    async def run(self, user_message: str) -> str:
+        """发送用户消息并获取最终回复，自动记录对话日志。"""
+        # 记录用户消息到对话日志
+        if self._registry:
+            self._registry.memory.add_conversation("user", user_message)
+
+        self._agent.add_user_message(user_message)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = await self._agent.run()
+
+        if not result or result.startswith("LLM call failed"):
+            return result or "(empty response)"
+
+        # 记录 AI 回复到对话日志
+        if self._registry:
+            self._registry.memory.add_conversation("assistant", result)
+
+        return result

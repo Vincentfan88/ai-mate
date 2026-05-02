@@ -40,40 +40,93 @@ class TestAnniversaryTracker:
     """Test anniversary tracking."""
 
     def test_add_and_check(self):
-        tracker = AnniversaryTracker(start_date=datetime(2025, 4, 30))
-        tracker.add_anniversary("认识纪念日", datetime(2025, 4, 30))
-        hits = tracker.check_today(datetime(2026, 4, 30))
-        assert len(hits) == 1
-        assert "1 周年" in hits[0]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/anniversaries.json"
+            tracker = AnniversaryTracker(start_date=datetime(2025, 4, 30), state_path=state_path)
+            tracker.add_anniversary("认识纪念日", datetime(2025, 4, 30))
+            hits = tracker.check_today(datetime(2026, 4, 30))
+            assert len(hits) == 1
+            assert "1 周年" in hits[0]
 
     def test_no_anniversary(self):
-        tracker = AnniversaryTracker(start_date=datetime(2025, 1, 1))
-        hits = tracker.check_today(datetime(2026, 4, 30))
-        assert len(hits) == 0
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/anniversaries.json"
+            tracker = AnniversaryTracker(start_date=datetime(2025, 1, 1), state_path=state_path)
+            hits = tracker.check_today(datetime(2026, 4, 30))
+            assert len(hits) == 0
 
     def test_days_since_start(self):
-        tracker = AnniversaryTracker(start_date=datetime(2026, 4, 20))
-        days = tracker.days_since_start(datetime(2026, 4, 30))
-        assert days == 10
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/anniversaries.json"
+            tracker = AnniversaryTracker(start_date=datetime(2026, 4, 20), state_path=state_path)
+            days = tracker.days_since_start(datetime(2026, 4, 30))
+            assert days == 10
+
+    def test_persistence(self):
+        """Anniversary state should persist across restarts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/anniversaries.json"
+            tracker = AnniversaryTracker(start_date=datetime(2025, 1, 1), state_path=state_path)
+            tracker.add_anniversary("恋爱纪念日", datetime(2025, 4, 30))
+
+            # New instance should load persisted state
+            tracker2 = AnniversaryTracker(state_path=state_path)
+            hits = tracker2.check_today(datetime(2026, 4, 30))
+            assert len(hits) == 1
+            assert "1 周年" in hits[0]
 
 
 class TestHabitTracker:
     """Test habit tracking."""
 
     def test_daily_emoji(self):
-        tracker = HabitTracker(config_path="companion/config/habits.json")
-        emoji = tracker.get_daily_emoji()
-        assert emoji is None or len(emoji) >= 1
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/habits.json"
+            tracker = HabitTracker(
+                config_path="companion/config/habits.json",
+                state_path=state_path,
+            )
+            emoji = tracker.get_daily_emoji()
+            assert emoji is None or len(emoji) >= 1
 
     def test_catchphrase(self):
-        tracker = HabitTracker(config_path="companion/config/habits.json")
-        phrase = tracker.get_catchphrase()
-        assert phrase is None or isinstance(phrase, str)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/habits.json"
+            tracker = HabitTracker(
+                config_path="companion/config/habits.json",
+                state_path=state_path,
+            )
+            phrase = tracker.get_catchphrase()
+            assert phrase is None or isinstance(phrase, str)
 
     def test_add_habit(self):
-        tracker = HabitTracker(config_path="companion/config/habits.json")
-        tracker.add_habit("按时吃饭")
-        assert "按时吃饭" in tracker.habits["daily"]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/habits.json"
+            tracker = HabitTracker(
+                config_path="companion/config/habits.json",
+                state_path=state_path,
+            )
+            tracker.add_habit("按时吃饭")
+            assert "按时吃饭" in tracker.habits["daily"]
+
+    def test_daily_emoji_persistent(self):
+        """Same day should return same emoji across restarts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = f"{tmpdir}/habits_state.json"
+            now = datetime(2026, 5, 1, 10, 0)
+            tracker = HabitTracker(
+                config_path="companion/config/habits.json",
+                state_path=state_path,
+            )
+            emoji1 = tracker.get_daily_emoji(now=now)
+
+            # New instance — same day, same emoji
+            tracker2 = HabitTracker(
+                config_path="companion/config/habits.json",
+                state_path=state_path,
+            )
+            emoji2 = tracker2.get_daily_emoji(now=now)
+            assert emoji1 == emoji2
 
 
 class TestTrendingCache:

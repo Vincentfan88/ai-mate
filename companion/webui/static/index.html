@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 伴侣</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>💕 AI 伴侣</h1>
+        <div class="subtitle">v2.0 · 端到端集成</div>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="chat" onclick="switchView('chat')">
+          <span class="icon">💬</span> 对话
+        </button>
+        <button class="nav-item" data-view="settings" onclick="switchView('settings')">
+          <span class="icon">⚙️</span> 设置
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Chat View -->
+      <div class="chat-view" id="chatView">
+        <div class="chat-header">
+          <div class="status-dot" id="statusDot"></div>
+          <span class="status-text" id="statusText">在线 · ENFP</span>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+          <div class="input-row">
+            <textarea id="chatInput" rows="1" placeholder="输入消息..."
+              onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
+            <button class="btn-send" id="sendBtn" onclick="sendMessage()">发送</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div class="settings-view" id="settingsView">
+        <div class="settings-header">
+          <h2>⚙️ 设置</h2>
+        </div>
+        <div class="settings-body">
+          <div class="setting-group">
+            <label>人格</label>
+            <select id="selPersona"></select>
+            <div class="hint">选择 AI 伴侣的人格设定</div>
+          </div>
+          <div class="setting-group">
+            <label>MBTI 类型</label>
+            <select id="selMbti">
+              <option value="ENFP">ENFP 自由者</option>
+              <option value="INFP">INFP 理想者</option>
+              <option value="ENTP">ENTP 辩论家</option>
+              <option value="INTP">INTP 思考者</option>
+              <option value="ENFJ">ENFJ 主人公</option>
+              <option value="INFJ">INFJ 倡导者</option>
+              <option value="ENTJ">ENTJ 指挥官</option>
+              <option value="INTJ">INTJ 策划者</option>
+              <option value="ESFP">ESFP 表演者</option>
+              <option value="ISFP">ISFP 探险家</option>
+              <option value="ESTP">ESTP 创业者</option>
+              <option value="ISTP">ISTP 巧匠</option>
+              <option value="ESFJ">ESFJ 照顾者</option>
+              <option value="ISFJ">ISFJ 守护者</option>
+              <option value="ESTJ">ESTJ 管家</option>
+              <option value="ISTJ">ISTJ 物流师</option>
+            </select>
+            <div class="hint">影响沟通风格和情绪表达（共 16 种）</div>
+          </div>
+          <div class="setting-group">
+            <label>模型</label>
+            <input type="text" id="inputModel" placeholder="deepseek-v4-flash">
+            <div class="hint">LLM 模型名称</div>
+          </div>
+          <div class="setting-group">
+            <label>API 地址</label>
+            <input type="text" id="inputApiBase" placeholder="http://127.0.0.1:15721">
+            <div class="hint">API 端点地址</div>
+          </div>
+          <div class="setting-divider"></div>
+          <div class="setting-group">
+            <label>AI 头像</label>
+            <div class="avatar-row">
+              <div class="avatar-preview" id="aiAvatarPreview">
+                <span class="avatar-placeholder">🤖</span>
+              </div>
+              <div class="avatar-actions">
+                <input type="file" id="aiAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('ai', this)">
+                <button class="btn-secondary" onclick="document.getElementById('aiAvatarInput').click()">上传</button>
+                <button class="btn-secondary btn-danger" id="aiAvatarDeleteBtn" onclick="deleteAvatar('ai')" style="display:none">删除</button>
+              </div>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label>我的头像</label>
+            <div class="avatar-row">
+              <div class="avatar-preview" id="userAvatarPreview">
+                <span class="avatar-placeholder">👤</span>
+              </div>
+              <div class="avatar-actions">
+                <input type="file" id="userAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('user', this)">
+                <button class="btn-secondary" onclick="document.getElementById('userAvatarInput').click()">上传</button>
+                <button class="btn-secondary btn-danger" id="userAvatarDeleteBtn" onclick="deleteAvatar('user')" style="display:none">删除</button>
+              </div>
+            </div>
+          </div>
+          <div class="setting-divider"></div>
+          <div class="setting-group">
+            <label>角色卡导入</label>
+            <div class="file-upload-row">
+              <input type="file" id="fileInput" accept=".png,.json" class="file-input-hidden">
+              <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">选择文件</button>
+              <span class="file-name" id="fileName">未选择文件</span>
+            </div>
+            <button class="btn-primary" id="importBtn" onclick="importCharacter()" disabled>导入角色卡</button>
+            <div class="hint">支持酒馆标准角色卡（.png / .json）</div>
+          </div>
+          <div class="setting-actions">
+            <button class="btn-primary" onclick="saveSettings()">保存并重启</button>
+            <button class="btn-secondary" onclick="reloadSession()">重建会话</button>
+          </div>
+
+          <div class="setting-divider"></div>
+
+          <div class="setting-group">
+            <label>飞书 Bot</label>
+            <div class="toggle-row">
+              <label class="toggle-label" for="feishuToggle">启用</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="feishuToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="hint">通过飞书长连接与 AI 伴侣对话</div>
+          </div>
+          <div class="setting-group">
+            <label>App ID</label>
+            <input type="text" id="feishuAppId" placeholder="飞书开放平台 App ID">
+          </div>
+          <div class="setting-group">
+            <label>App Secret</label>
+            <input type="password" id="feishuAppSecret" placeholder="飞书开放平台 App Secret">
+          </div>
+          <div class="setting-group">
+            <label>连接状态</label>
+            <div class="feishu-status-row">
+              <span class="feishu-status-dot" id="feishuStatusDot"></span>
+              <span class="feishu-status-text" id="feishuStatusText">检查中…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

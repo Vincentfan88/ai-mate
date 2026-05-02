@@ -9,7 +9,6 @@ from typing import Optional
 
 from .weibull import weibull_sample, compute_hour_bonus
 from .hmm_state_machine import CompanionState, HMMStateMachine
-HMMState = CompanionState  # alias
 from .hard_filter import HardFilter
 
 
@@ -26,7 +25,11 @@ class TriggerDecision:
 class TriggerEngine:
     """多层触发引擎 — 两阶段拟人化决策"""
 
-    def __init__(self, config_path: str = "companion/config/triggers.json"):
+    def __init__(
+        self,
+        config_path: str = "companion/config/triggers.json",
+        state_path: str = None,
+    ):
         with open(config_path) as f:
             self.config = json.load(f)
 
@@ -42,7 +45,8 @@ class TriggerEngine:
             externally_accessible=hf_cfg.get("externally_accessible", True),
         )
 
-        self.hmm = HMMStateMachine(self.config["states"])
+        hmm_state_path = state_path or f"{Path(config_path).parent.parent}/workspace/companion/trigger_state.json"
+        self.hmm = HMMStateMachine(self.config["states"], state_path=hmm_state_path)
 
     def compute(
         self,

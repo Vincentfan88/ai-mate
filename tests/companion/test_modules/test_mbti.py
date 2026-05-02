@@ -77,10 +77,7 @@ class TestMBTIAdapter:
         assert "ENFP" in types
         assert "INTJ" in types
 
-    def test_invalid_type_raises(self):
+    def test_invalid_type_fallbacks(self):
         adapter = MBTIAdapter()
-        try:
-            adapter.get_profile("XXXX")
-            assert False, "Should raise ValueError"
-        except ValueError:
-            pass
+        profile = adapter.get_profile("XXXX")
+        assert profile is not None  # 应 fallback 而非抛异常

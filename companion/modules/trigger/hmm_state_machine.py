@@ -128,6 +128,11 @@ class HMMStateMachine:
         self.transition_count = 0
         self.last_user_message: Optional[datetime] = None
 
+        # Ensure parent directory exists before any state operations
+        if self.state_path:
+            from pathlib import Path
+            Path(self.state_path).parent.mkdir(parents=True, exist_ok=True)
+
         self._record_change(CompanionState.IDLE)
         self._load_state()
 
@@ -135,7 +140,7 @@ class HMMStateMachine:
         """从文件恢复状态"""
         if self.state_path:
             try:
-                data = json.loads(open(self.state_path).read())
+                data = json.loads(Path(self.state_path).read_text())
                 self.current_state = data.get("state", CompanionState.IDLE)
                 self.last_user_message = None
                 if data.get("last_user_message"):

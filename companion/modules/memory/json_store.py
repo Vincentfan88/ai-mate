@@ -191,5 +191,14 @@ class JsonFactStore(MemoryStore):
         except OSError as e:
             logger.error(f"[JsonFactStore] 保存失败: {e}")
 
+    def get_user_facts(self) -> List[dict]:
+        """获取所有用户事实（排除 AI 属性）"""
+        return [f for f in self._facts if f.get("source") != "ai_attribute"]
+
+    def get_recent_interactions(self, limit: int = 5) -> List[dict]:
+        """获取最近互动 — JsonFactStore 不存储交互，返回空列表
+        （如需完整交互记录，使用 MemorySystem.get_recent_interactions）"""
+        return []
+
     def close(self) -> None:
         pass  # JSON 文件不需要显式关闭

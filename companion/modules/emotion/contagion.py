@@ -9,6 +9,10 @@ def compute_contagion(user_emotion: str, contagion_config: dict) -> dict:
         "生气": {"target": "担心", "factor": contagion_config.get("sad_infection", 0.4)},
         "焦虑": {"target": "担心", "factor": contagion_config.get("anxious_infection", 0.5)},
         "兴奋": {"target": "兴奋", "factor": contagion_config.get("happy_infection", 0.6)},
+        # Extended mappings for all 8 emotion types
+        "担心": {"target": "担心", "factor": contagion_config.get("sad_infection", 0.4)},
+        "撒娇": {"target": "撒娇", "factor": contagion_config.get("happy_infection", 0.6)},
+        "害羞": {"target": "害羞", "factor": contagion_config.get("happy_infection", 0.5)},
     }
 
     result = contagion_map.get(user_emotion, {"target": None, "factor": 0.0})

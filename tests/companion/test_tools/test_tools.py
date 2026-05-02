@@ -23,7 +23,6 @@ def make_registry(tmpdir: str) -> CompanionRegistry:
         workspace=workspace,
         config_dir=config_dir,
         mbti_type="ENFP",
-        relationship_level=0,
     )
     return registry
 

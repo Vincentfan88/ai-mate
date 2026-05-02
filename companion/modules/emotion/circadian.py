@@ -11,10 +11,23 @@ def compute_circadian(
     amplitude: float = 0.4,
     baseline: float = 0.3,
 ) -> float:
-    """计算指定小时的昼夜节律情绪基线"""
+    """计算指定小时的昼夜节律情绪基线
+
+    公式: value = baseline + amplitude * cos((hour - trough) / 24 * 2π - π)
+    确保谷值 ≥ 0：振幅不应超过基线（amplitude <= baseline）。
+    若配置值导致谷值 < 0，自动归一化到 [0,1]。
+    """
     if hour is None:
         hour = datetime.now().hour
 
     phase = (hour - trough_hour) / 24 * 2 * math.pi
-    value = baseline + amplitude * math.cos(phase - math.pi)
-    return max(0.0, min(1.0, value))
+    raw = baseline + amplitude * math.cos(phase - math.pi)
+
+    # 归一化到 [0,1]（防止 amplitude > baseline 时谷值被 clamp）
+    min_val = baseline - amplitude
+    max_val = baseline + amplitude
+    if max_val != min_val:
+        normalized = (raw - min_val) / (max_val - min_val)
+    else:
+        normalized = 0.5
+    return max(0.0, min(1.0, normalized))

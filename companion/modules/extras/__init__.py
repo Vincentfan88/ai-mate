@@ -52,14 +52,39 @@ def _describe_time(hour: int) -> str:
 
 
 class AnniversaryTracker:
-    """纪念日追踪"""
+    """纪念日追踪 — 持久化存储 + 自动检查"""
 
-    def __init__(self, start_date: Optional[datetime] = None):
+    def __init__(self, start_date: Optional[datetime] = None,
+                 state_path: str = "workspace/companion/anniversaries.json"):
         self.start_date = start_date or datetime.now()
+        self.state_path = Path(state_path)
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.anniversaries: Dict[str, dict] = {}
+        self._load_state()
+
+    def _load_state(self):
+        """从文件加载纪念日"""
+        if self.state_path.exists():
+            try:
+                data = json.loads(self.state_path.read_text())
+                if data.get("start_date"):
+                    self.start_date = datetime.fromisoformat(data["start_date"])
+                for name, info in data.get("anniversaries", {}).items():
+                    self.anniversaries[name] = info
+            except Exception:
+                pass
+
+    def _save_state(self):
+        """保存纪念日到文件"""
+        data = {
+            "start_date": self.start_date.isoformat(),
+            "anniversaries": self.anniversaries,
+        }
+        self.state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
     def add_anniversary(self, name: str, date: datetime, recurrence: str = "yearly"):
         self.anniversaries[name] = {"date": date.isoformat(), "recurrence": recurrence}
+        self._save_state()
 
     def check_today(self, now: Optional[datetime] = None) -> List[str]:
         """检查今天是否是某个纪念日"""
@@ -79,23 +104,57 @@ class AnniversaryTracker:
 
 
 class HabitTracker:
-    """习惯追踪"""
+    """习惯追踪 — 按日关联 emoji + 口头禅"""
 
-    def __init__(self, config_path: str = "companion/config/habits.json"):
+    def __init__(self, config_path: str = "companion/config/habits.json",
+                 state_path: str = "workspace/companion/habits_state.json"):
+        self.config_path = config_path
+        self.state_path = Path(state_path)
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(config_path) as f:
             self.config = json.load(f)
+
         self.habits: Dict[str, List[str]] = {"daily": [], "weekly": []}
+        self._daily_emoji: Dict[str, str] = {}  # date -> emoji
+        self._load_state()
+
+    def _load_state(self):
+        """加载习惯状态"""
+        if self.state_path.exists():
+            try:
+                data = json.loads(self.state_path.read_text())
+                self._daily_emoji = data.get("daily_emoji", {})
+            except Exception:
+                pass
+
+    def _save_state(self):
+        """保存习惯状态"""
+        data = {
+            "daily_emoji": self._daily_emoji,
+        }
+        self.state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
     def add_habit(self, habit: str, frequency: str = "daily"):
         if frequency in self.habits:
             self.habits[frequency].append(habit)
 
-    def get_daily_emoji(self) -> Optional[str]:
-        """获取今日 emoji"""
+    def get_daily_emoji(self, now: Optional[datetime] = None) -> Optional[str]:
+        """获取今日 emoji — 按日期固定，非随机"""
+        now = now or datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+
+        if today_str in self._daily_emoji:
+            return self._daily_emoji[today_str]
+
         if not self.config.get("daily_emoji", {}).get("enabled"):
             return None
+
         emojis = ["😊", "🌟", "✨", "💕", "🌸", "🍀", "🌙"]
-        return random.choice(emojis)
+        chosen = random.choice(emojis)
+        self._daily_emoji[today_str] = chosen
+        self._save_state()
+        return chosen
 
     def get_catchphrase(self) -> Optional[str]:
         """获取口头禅"""

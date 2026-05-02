@@ -50,14 +50,17 @@ class MdConversationLog(ConversationLog):
     def get_recent(self, limit: int = 3) -> List[dict]:
         """获取最近 N 轮对话"""
         all_entries = []
-        # 按日期排序读取最近的文件
         files = sorted(self.log_dir.glob("*.md"))
-        for file_path in files[-3:]:  # 最多读最近 3 天的文件
+        # 按日期从后往前读取，直到收集够 limit 条
+        for file_path in reversed(files):
             content = file_path.read_text(encoding="utf-8")
             entries = self._parse_md(content)
-            all_entries.extend(entries)
+            all_entries = entries + all_entries
+            if len(all_entries) >= limit and len(files) - files.index(file_path) >= 3:
+                break  # 至少读了 3 天且已够 limit
+            if len(all_entries) >= limit * 3:  # 避免读太多文件
+                break
 
-        # 取最后 N 条
         return all_entries[-limit:]
 
     def _parse_md(self, content: str) -> List[dict]:

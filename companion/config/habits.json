@@ -1,16 +1,10 @@
 {
   "daily_emoji": {
-    "enabled": true,
-    "probability": 0.3,
-    "hour": 12
+    "enabled": true
   },
   "catchphrases": {
     "enabled": true,
     "list": ["嗯嗯", "哈哈", "哎呀", "诶嘿嘿"],
     "probability": 0.15
-  },
-  "fixed_time_greeting": {
-    "enabled": false,
-    "hours": [8, 22]
   }
 }

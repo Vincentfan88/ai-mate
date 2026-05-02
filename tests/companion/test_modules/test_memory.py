@@ -232,3 +232,68 @@ class TestMemorySystem:
             summary = memory.get_persona_summary()
             assert "小美" in summary
             assert "女朋友" in summary
+
+
+class TestPreferenceInfer:
+    """Test preference inference — rules-based, persistence, belief management."""
+
+    def test_rule_based_inference(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonFactStore(facts_path=f"{tmpdir}/facts.json")
+            store.record("今天加班到十点好累啊", importance=0.7)
+            store.record("周末想睡个懒觉", importance=0.5)
+
+            infer = PreferenceInfer(store, data_path=f"{tmpdir}/preference.json")
+            result = infer.infer()
+            assert len(result["inferences"]) > 0
+            # Should detect fatigue-related signals
+            assert result["belief_count"] > 0
+
+    def test_belief_persistence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonFactStore(facts_path=f"{tmpdir}/facts.json")
+            store.record("用户喜欢吃火锅", importance=0.8)
+
+            data_path = f"{tmpdir}/preference.json"
+            infer = PreferenceInfer(store, data_path=data_path)
+            infer.infer()
+            beliefs1 = infer.get_active_beliefs()
+
+            # New instance should load persisted beliefs
+            infer2 = PreferenceInfer(store, data_path=data_path)
+            beliefs2 = infer2.get_active_beliefs()
+            assert len(beliefs1) == len(beliefs2)
+
+    def test_confirm_and_deny(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonFactStore(facts_path=f"{tmpdir}/facts.json")
+            store.record("今天好累", importance=0.5)
+
+            infer = PreferenceInfer(store, data_path=f"{tmpdir}/preference.json")
+            infer.infer()
+            beliefs = infer.get_active_beliefs()
+            if beliefs:
+                b = beliefs[0]
+                infer.confirm_belief(b.id)
+                assert b.confirm_count == 1
+                infer.deny_belief(b.id)
+                assert b.deny_count == 1
+
+    def test_no_crash_on_empty_store(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonFactStore(facts_path=f"{tmpdir}/facts.json")
+            infer = PreferenceInfer(store, data_path=f"{tmpdir}/preference.json")
+            # Should not crash even with no facts
+            result = infer.infer()
+            assert result["inferences"] == []
+
+    def test_get_stats(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = JsonFactStore(facts_path=f"{tmpdir}/facts.json")
+            store.record("用户喜欢看电影", importance=0.6)
+
+            infer = PreferenceInfer(store, data_path=f"{tmpdir}/preference.json")
+            infer.infer()
+            stats = infer.get_stats()
+            assert "total_beliefs" in stats
+            assert "active_beliefs" in stats

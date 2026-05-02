@@ -20,12 +20,10 @@ class CompanionRegistry:
         workspace: str = "workspace/companion",
         config_dir: str = "companion/config",
         mbti_type: str = "ENFP",
-        relationship_level: int = 0,
     ):
         self.workspace = workspace
         self.config_dir = config_dir
         self.mbti_type = mbti_type
-        self.relationship_level = relationship_level
 
         # Lazy-initialized modules
         self._modules: Dict[str, object] = {}
@@ -39,15 +37,27 @@ class CompanionRegistry:
 
     @property
     def emotion(self) -> EmotionSystem:
-        return self._get_or_create("emotion", lambda: EmotionSystem(
+        return self._get_or_create("emotion", lambda: self._create_emotion_system())
+
+    def _create_emotion_system(self) -> EmotionSystem:
+        # Inject MBTI emotional config for personality-aware emotion selection
+        mbti_profile = self.mbti.get_profile(self.mbti_type)
+        emotional_config = {
+            "primary_emotions": mbti_profile.emotional.primary_emotions,
+            "emotion_triggers": mbti_profile.emotional.emotion_triggers,
+            "self_disclosure_tendency": mbti_profile.emotional.self_disclosure_tendency,
+        }
+        return EmotionSystem(
             config_path=f"{self.config_dir}/emotions.json",
-            state_file=f"{self.workspace}/emotion_state.json",
-        ))
+            state_file=f"{self.workspace}/states/emotion_state.json",
+            emotional_config=emotional_config,
+        )
 
     @property
     def trigger(self) -> TriggerEngine:
         return self._get_or_create("trigger", lambda: TriggerEngine(
             config_path=f"{self.config_dir}/triggers.json",
+            state_path=f"{self.workspace}/states/trigger_state.json",
         ))
 
     @property
@@ -64,20 +74,26 @@ class CompanionRegistry:
     def relationship(self) -> RelationshipManager:
         return self._get_or_create("relationship", lambda: RelationshipManager(
             config_path=f"{self.config_dir}/relationship.json",
+            state_path=f"{self.workspace}/states/relationship_state.json",
         ))
 
     @property
     def liveness(self) -> LivenessTracker:
-        return self._get_or_create("liveness", lambda: LivenessTracker())
+        return self._get_or_create("liveness", lambda: LivenessTracker(
+            data_path=f"{self.workspace}/states/liveness.json",
+        ))
 
     @property
     def anniversary(self) -> AnniversaryTracker:
-        return self._get_or_create("anniversary", lambda: AnniversaryTracker())
+        return self._get_or_create("anniversary", lambda: AnniversaryTracker(
+            state_path=f"{self.workspace}/states/anniversaries.json",
+        ))
 
     @property
     def habits(self) -> HabitTracker:
         return self._get_or_create("habits", lambda: HabitTracker(
             config_path=f"{self.config_dir}/habits.json",
+            state_path=f"{self.workspace}/states/habits.json",
         ))
 
     @property
