@@ -254,8 +254,14 @@ async def import_character(file: UploadFile = File(...)):
             safe_name = "imported_character"
         filename = f"{safe_name}.json"
 
-        out_path = SKILLS_DIR / filename
         SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = SKILLS_DIR / filename
+
+        # 验证解析后的路径仍在 SKILLS_DIR 内
+        resolved = out_path.resolve()
+        if not str(resolved).startswith(str(SKILLS_DIR.resolve())):
+            raise ValueError("非法的文件路径")
+
         out_path.write_text(
             json.dumps(persona, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -412,9 +418,10 @@ async def websocket_chat(ws: WebSocket):
                 if response and not response.startswith("LLM call failed"):
                     await ws.send_json({"type": "message", "content": response})
                 else:
-                    await ws.send_json({"type": "error", "content": f"抱歉，我出神了没听清… 能再说一遍吗？（{response}）"})
+                    await ws.send_json({"type": "error", "content": "抱歉，我出神了没听清… 能再说一遍吗？"})
             except Exception as e:
-                await ws.send_json({"type": "error", "content": f"哎呀出错了: {str(e)}"})
+                logging.getLogger("companion").error(f"WebSocket 错误: {e}", exc_info=True)
+                await ws.send_json({"type": "error", "content": "抱歉，我出错了… 请稍后再试。"})
 
     except WebSocketDisconnect:
         pass

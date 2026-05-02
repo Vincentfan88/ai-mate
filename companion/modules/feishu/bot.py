@@ -205,8 +205,8 @@ class FeishuBot:
             if response.startswith("LLM call failed"):
                 response = "抱歉，我刚刚走神了… 能再说一遍吗？"
         except Exception as e:
-            logger.error("FeishuBot agent.run 异常: %s", e)
-            response = f"哎呀出错了: {str(e)[:100]}"
+            logger.error("FeishuBot agent.run 异常: %s", e, exc_info=True)
+            response = "抱歉，我出了点问题… 请稍后再试。"
 
         await self._send_reply(chat_id, response)
 

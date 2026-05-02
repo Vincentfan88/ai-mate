@@ -145,7 +145,7 @@ class CompanionMemoryTool(Tool):
                 if not content:
                     return ToolResult(success=False, content="", error="record 操作需要提供 content")
                 r.memory.record(content)
-                return ToolResult(success=True, content=f"已记录: {content}")
+                return ToolResult(success=True, content="已记录到记忆中")
             elif action == "search":
                 results = r.memory.search(query)
                 if not results:
