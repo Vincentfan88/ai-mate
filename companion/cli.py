@@ -87,6 +87,9 @@ def build_companion_agent(
     )
 
     # 4. 创建 companion 工具 (Mini-Agent Tool 子类)
+    # 注入 LLM 客户端到 registry（用于偏好推断等智能功能）
+    registry.set_llm_client(llm)
+
     tools = [
         CompanionStateTool(registry),
         CompanionMemoryTool(registry),

@@ -1,6 +1,6 @@
 """Companion 模块注册表 — 统一管理所有模块实例。"""
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from companion.modules.memory import MemorySystem
 from companion.modules.emotion import EmotionSystem
@@ -28,12 +28,27 @@ class CompanionRegistry:
         # Lazy-initialized modules
         self._modules: Dict[str, object] = {}
 
+        # Optional LLM client for preference inference
+        self._llm_client: Any = None
+
+    def set_llm_client(self, client: Any) -> None:
+        """注入 LLM 客户端（用于偏好推断等智能功能）"""
+        self._llm_client = client
+
+    @property
+    def llm_client(self) -> Any:
+        return self._llm_client
+
     @property
     def memory(self) -> MemorySystem:
-        return self._get_or_create("memory", lambda: MemorySystem(
+        mem = self._get_or_create("memory", lambda: MemorySystem(
             workspace=self.workspace,
             persona_path=f"{self.config_dir}/../skills/companion/default.json",
         ))
+        # 如果已有 LLM 客户端，注入到 memory 系统
+        if self._llm_client:
+            mem.set_llm_client(self._llm_client)
+        return mem
 
     @property
     def emotion(self) -> EmotionSystem:

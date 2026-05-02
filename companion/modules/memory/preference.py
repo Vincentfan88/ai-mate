@@ -165,6 +165,7 @@ class PreferenceInfer:
         self.data_path = Path(data_path)
         self.data_path.parent.mkdir(parents=True, exist_ok=True)
         self._beliefs: List[PreferenceBelief] = self._load_beliefs()
+        self._llm_client: Any = None  # 可选，由外部注入
 
     def _load_beliefs(self) -> List[PreferenceBelief]:
         if self.data_path.exists():
@@ -215,8 +216,10 @@ class PreferenceInfer:
         signals: List[str],
         llm_client: Any = None,
     ) -> List[Tuple[str, float, List[str]]]:
-        if llm_client:
-            return self._llm_inference(signals, llm_client)
+        # 优先使用传入的 llm_client，其次使用已注入的
+        effective_client = llm_client or self._llm_client
+        if effective_client:
+            return self._llm_inference(signals, effective_client)
         return self._rule_based_inference(signals)
 
     def _llm_inference(
@@ -226,8 +229,18 @@ class PreferenceInfer:
     ) -> List[Tuple[str, float, List[str]]]:
         prompt = INFERENCE_PROMPT.format(conversation_text="\n".join(signals)) + "\n\n" + INFERENCE_EXAMPLE
         try:
-            response = llm_client.chat([{"role": "user", "content": prompt}])
-            return self._parse_inference_response(response)
+            # Mini-Agent LLMClient uses async generate()
+            if hasattr(llm_client, "generate"):
+                import asyncio
+                loop = asyncio.get_event_loop()
+                messages = [{"role": "user", "content": prompt}]
+                response = loop.run_until_complete(llm_client.generate(messages))
+                text = response.content if hasattr(response, "content") else str(response)
+            elif hasattr(llm_client, "chat"):
+                text = llm_client.chat([{"role": "user", "content": prompt}])
+            else:
+                raise ValueError("Unsupported LLM client: no generate or chat method")
+            return self._parse_inference_response(text)
         except Exception as e:
             logger.warning(f"[PreferenceInfer] LLM 推断失败: {e}")
             return self._rule_based_inference(signals)

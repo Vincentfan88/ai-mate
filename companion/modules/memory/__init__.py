@@ -22,7 +22,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from .store import MemoryStore
 from .json_store import JsonFactStore
@@ -149,7 +149,12 @@ class MemorySystem:
     # -------------------- 偏好推断 --------------------
 
     def infer_preferences(self) -> dict:
-        return self.preference.infer()
+        return self.preference.infer(llm_client=getattr(self, '_llm_client', None))
+
+    def set_llm_client(self, llm_client: Any) -> None:
+        """注入 LLM 客户端（由 registry 代理设置）"""
+        self._llm_client = llm_client
+        self.preference._llm_client = llm_client
 
     def check_contradictions(self, facts: Optional[List[dict]] = None) -> List[dict]:
         if facts is None:
