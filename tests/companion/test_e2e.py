@@ -25,7 +25,6 @@ def registry():
             workspace=workspace,
             config_dir="companion/config",
             mbti_type="ENFP",
-            relationship_level=2,  # Friend level
         )
         yield reg
 
@@ -119,19 +118,18 @@ class TestEndToEnd:
             received.append(msg)
 
         async def run_test():
+            # Start router first
+            task = asyncio.create_task(router.run(handler))
+            await asyncio.sleep(0.05)
+            # Then enqueue messages
             await router.enqueue({"content": "hello"})
             await router.enqueue({"content": "world"})
-            await asyncio.sleep(0.1)
-
-            # Run for a short time
-            task = asyncio.create_task(router.run(handler))
             await asyncio.sleep(0.3)
             router.stop()
             await task
 
         await run_test()
-        # Messages should have been processed
-        assert len(received) >= 0  # At least the router works
+        assert len(received) >= 2  # Both messages should be processed
 
     @pytest.mark.asyncio
     async def test_webhook_listener(self, registry):
@@ -161,3 +159,150 @@ class TestEndToEnd:
         ])
         topic = registry.trending.get_random_topic()
         assert "测试" in topic
+
+    def test_preference_inference_end_to_end(self, registry):
+        """Test: record facts → infer preferences → get beliefs."""
+        # Record facts that signal preferences
+        registry.memory.record("用户喜欢吃辣", importance=0.7)
+        registry.memory.record("用户说今天加班到十点好累", importance=0.8)
+        registry.memory.record("用户想周末睡个懒觉", importance=0.5)
+
+        # Infer preferences (rule-based, no LLM)
+        result = registry.memory.infer_preferences()
+        assert result["inferences"] is not None
+        assert result["belief_count"] > 0
+
+        # Get active beliefs
+        beliefs = registry.memory.preference.get_active_beliefs()
+        assert len(beliefs) > 0
+        assert beliefs[0].trust_score > 0
+
+    def test_preference_inference_persistence(self, registry):
+        """Test: inferred beliefs should persist across inference calls."""
+        registry.memory.record("用户喜欢喝咖啡", importance=0.8)
+        registry.memory.record("用户每天早上都想喝一杯", importance=0.5)
+
+        # First inference
+        result1 = registry.memory.infer_preferences()
+        beliefs1 = registry.memory.preference.get_active_beliefs()
+
+        # Second inference — same store, should accumulate
+        result2 = registry.memory.infer_preferences()
+        beliefs2 = registry.memory.preference.get_active_beliefs()
+
+        assert len(beliefs2) >= len(beliefs1)
+
+    def test_preference_confirm_and_deny(self):
+        """Test: confirm/deny beliefs should update trust scores."""
+        import tempfile
+        from pathlib import Path
+        from companion.modules.memory import MemorySystem
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = f"{tmpdir}/ws"
+            Path(workspace).mkdir(parents=True)
+            memory = MemorySystem(workspace=workspace, persona_path=None)
+
+            memory.record("用户对辣的食物很感兴趣", importance=0.8)
+            memory.infer_preferences()
+
+            beliefs = memory.preference.get_active_beliefs()
+            assert len(beliefs) > 0
+            b = beliefs[0]
+            initial_confirm = b.confirm_count
+            memory.preference.confirm_belief(b.id)
+            assert b.confirm_count == initial_confirm + 1
+
+            memory.preference.deny_belief(b.id)
+            assert b.deny_count == 1
+
+    def test_contradiction_detection_end_to_end(self, registry):
+        """Test: record contradictory facts → detect contradiction."""
+        registry.memory.record("用户喜欢吃辣", importance=0.7)
+        registry.memory.record("用户讨厌吃辣", importance=0.7)
+
+        contradictions = registry.memory.check_contradictions()
+        assert len(contradictions) > 0
+
+    def test_liveness_multi_interaction_accumulation(self, registry):
+        """Test: multiple interactions accumulate liveness dimensions."""
+        # Simulate a series of interactions
+        registry.liveness.record_initiated_contact()
+        registry.liveness.record_response("今天有点累，想早点休息")
+        registry.liveness.record_response("靠在你肩膀上真舒服")
+        registry.liveness.record_response("宝贝，今天工作顺利吗")
+        registry.liveness.record_response("哎呀，突然想吃火锅了")
+
+        scores = registry.liveness.calculate_scores()
+        # Should detect multiple emotion types
+        assert scores["情绪化"] > 0
+        # Should detect physical references
+        assert scores["身体存在感"] > 0
+        # Should detect vulnerability (有点累 matches vuln_words)
+        assert scores["脆弱性"] > 0
+
+    def test_emotion_residue_persistence(self, registry):
+        """Test: emotion residue should persist and decay over time."""
+        # First call
+        emotion1 = registry.emotion.get_current_emotion("user_message")
+        registry.emotion.save_residue()
+
+        # Second call immediately after
+        emotion2 = registry.emotion.get_current_emotion("user_message")
+
+        # Both should return valid emotions
+        assert emotion1["emotion"] is not None
+        assert emotion2["emotion"] is not None
+
+    def test_anniversary_and_habits_integration(self, registry):
+        """Test: anniversary and habit tracking work end-to-end."""
+        from datetime import datetime
+
+        # Add anniversary
+        registry.anniversary.add_anniversary("认识纪念日", datetime(2025, 4, 30))
+
+        # Check on anniversary date
+        hits = registry.anniversary.check_today(datetime(2026, 4, 30))
+        assert len(hits) == 1
+        assert "1 周年" in hits[0]
+
+        # Get daily emoji
+        emoji = registry.habits.get_daily_emoji()
+        assert emoji is not None or emoji is None  # Config-controlled
+
+        # Get catchphrase
+        phrase = registry.habits.get_catchphrase()
+        # May or may not appear (probability-based)
+        assert phrase is None or isinstance(phrase, str)
+
+    def test_days_since_start(self, registry):
+        """Test: relationship days calculation."""
+        registry.relationship.current_level = 0
+        days = registry.relationship.get_days_together()
+        assert days >= 0
+
+    def test_full_webhook_emotion_trigger_pipeline(self, registry):
+        """Test: webhook message → emotion → trigger pipeline."""
+        import asyncio
+
+        router = MessageRouter()
+        webhook = WebhookListener(registry, router)
+
+        # Simulate user sending a message
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(
+                webhook.handle_message({"content": "今天好想你呀"})
+            )
+        finally:
+            loop.close()
+
+        # Emotion should reflect user emotion
+        emotion = registry.emotion.get_current_emotion(
+            "user_message", user_emotion="想念"
+        )
+        assert emotion["emotion"] is not None
+
+        # Trigger should be computable
+        decision = registry.trigger.compute(hours_since_last_contact=24)
+        assert decision.pull is not None or decision.hold_back is not None

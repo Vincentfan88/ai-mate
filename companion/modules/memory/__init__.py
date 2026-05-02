@@ -61,7 +61,10 @@ class MemorySystem:
         )
 
         # L2+ 偏好推断
-        self.preference = PreferenceInfer(self.fact_store)
+        self.preference = PreferenceInfer(
+            self.fact_store,
+            data_path=f"{workspace}/preference.json",
+        )
 
         # 矛盾检测
         self.contradiction = ContradictionDetector()
