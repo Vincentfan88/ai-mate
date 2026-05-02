@@ -5,10 +5,13 @@ import contextlib
 import io
 import json
 import logging
+import os
 import struct
 from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -24,37 +27,35 @@ logger = logging.getLogger("companion")
 BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 
-# 当前配置
+# ── 从环境变量加载系统参数（支持 .env 文件） ──
+load_dotenv()
+
+# 当前配置 — 系统参数从环境变量读取，用户参数从磁盘 config.json 读取
 _config = {
+    # 用户设定（可修改，持久化到 config.json）
     "mbti": "ENFP",
     "persona": "default",
-    "model": "deepseek-v4-flash",
-    "api_base": "https://api.deepseek.com/v1",
-    "api_key": "",
-    "max_steps": 5,
-    "workspace": "workspace/companion",
-    # 云端模型费用
-    "cloud_price_in": 1.0,
-    "cloud_price_out": 4.0,
-    "price_cache_in": 0.1,
-    # 用户设定
     "user_name": "",
-    # 本地模型
-    "local_model_enabled": False,
-    "local_model": "qwen3-4b",
-    "local_api_base": "http://127.0.0.1:1234/v1",
-    # 飞书
-    "feishu_app_id": "",
-    "feishu_app_secret": "",
-    "feishu_chat_id": "",
-    "feishu_enabled": False,
-    # 费用预算
     "budget": 0,
-    # 免打扰时段（主动触发规则）— 新版多段格式
     "quiet_hours_blocks": [[0, 6]],
-    # 兼容旧版单段字段
     "quiet_hours_start": 0,
     "quiet_hours_end": 6,
+    # 系统参数（来自环境变量，运行时可改但不持久化）
+    "model": os.environ.get("LLM_MODEL", "deepseek-v4-flash"),
+    "api_base": os.environ.get("LLM_API_BASE", "https://api.deepseek.com/v1"),
+    "api_key": os.environ.get("LLM_API_KEY", ""),
+    "max_steps": 5,
+    "workspace": "workspace/companion",
+    "cloud_price_in": float(os.environ.get("CLOUD_PRICE_IN", "1.0")),
+    "cloud_price_out": float(os.environ.get("CLOUD_PRICE_OUT", "4.0")),
+    "price_cache_in": float(os.environ.get("PRICE_CACHE_IN", "0.1")),
+    "local_model_enabled": os.environ.get("LOCAL_MODEL_ENABLED", "false").lower() == "true",
+    "local_model": os.environ.get("LOCAL_MODEL", "qwen3-4b"),
+    "local_api_base": os.environ.get("LOCAL_API_BASE", "http://127.0.0.1:1234/v1"),
+    "feishu_app_id": os.environ.get("FEISHU_APP_ID", ""),
+    "feishu_app_secret": os.environ.get("FEISHU_APP_SECRET", ""),
+    "feishu_chat_id": os.environ.get("FEISHU_CHAT_ID", ""),
+    "feishu_enabled": os.environ.get("FEISHU_ENABLED", "false").lower() == "true",
 }
 
 # 缓存 agent 实例
@@ -63,37 +64,38 @@ _agent_ref = None  # (config_hash, SilentAgentWrapper)
 # 飞书 Bot 实例
 _feishu_bot = None
 
-# 配置持久化文件路径
+# 配置持久化文件路径 — 仅保存用户设定
 CONFIG_FILE = Path("workspace/companion/config.json")
+
+# 用户设定字段（可持久化），其余为系统参数不持久化
+_USER_KEYS = {"mbti", "persona", "user_name", "budget", "quiet_hours_blocks", "quiet_hours_start", "quiet_hours_end"}
 
 
 def _load_config() -> None:
-    """从磁盘加载配置（覆盖默认值）"""
+    """从磁盘加载用户设定（覆盖默认值）"""
     global _config
     if CONFIG_FILE.exists():
         try:
             saved = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            # 只覆盖已保存的键，保留默认结构
             for k, v in saved.items():
-                if k in _config:
+                if k in _USER_KEYS and k in _config:
                     _config[k] = v
-            logger.info(f"配置已从磁盘加载: {CONFIG_FILE}")
+            logger.info(f"用户配置已从磁盘加载: {CONFIG_FILE}")
         except Exception as e:
-            logger.warning(f"配置加载失败，使用默认值: {e}")
+            logger.warning(f"用户配置加载失败，使用默认值: {e}")
 
 
 def _save_config() -> None:
-    """将当前配置写入磁盘"""
+    """仅保存用户设定到磁盘，不保存系统参数"""
     try:
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        # 排除敏感字段（api_key、feishu_app_secret）
-        safe_config = {k: v for k, v in _config.items()}
+        user_config = {k: _config[k] for k in _USER_KEYS if k in _config}
         CONFIG_FILE.write_text(
-            json.dumps(safe_config, indent=2, ensure_ascii=False),
+            json.dumps(user_config, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
     except Exception as e:
-        logger.error(f"配置保存失败: {e}")
+        logger.error(f"用户配置保存失败: {e}")
 
 # 主动触发实例
 _proactive_loop = None

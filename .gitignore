@@ -45,6 +45,11 @@ Thumbs.db
 config.yaml
 mcp.json
 
+# Environment variables (contains secrets)
+.env
+.env.*
+!.env.example
+
 # test file
 demo.py
 hello.py
