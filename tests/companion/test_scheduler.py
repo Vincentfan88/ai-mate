@@ -268,24 +268,37 @@ class TestTrendingFetcher:
     @pytest.mark.asyncio
     async def test_fetch_saves_topics(self, registry):
         fetcher = TrendingFetcher(registry)
-        await fetcher._fetch()
+
+        import unittest.mock as mock
+        mock_response = mock.MagicMock(text='{"word":"测试热搜1"}{"word":"测试热搜2"}')
+        mock_client_ctx = mock.AsyncMock()
+        mock_client_ctx.__aenter__.return_value.get.return_value = mock_response
+        mock_client_ctx.__aexit__.return_value = None
+
+        with mock.patch("httpx.AsyncClient", return_value=mock_client_ctx):
+            await fetcher._fetch()
 
         topics = registry.trending.get()
         assert topics is not None
         assert len(topics) == 2
-        assert topics[0]["title"] == "今日热点话题示例1"
+        assert topics[0]["title"] == "测试热搜1"
 
     @pytest.mark.asyncio
     async def test_fetch_overwrites_cache(self, registry):
         fetcher = TrendingFetcher(registry)
-        # Save old data
         registry.trending.save([{"title": "旧话题"}])
 
-        # Fetch should overwrite
-        await fetcher._fetch()
+        import unittest.mock as mock
+        mock_response = mock.MagicMock(text='{"word":"新热搜"}')
+        mock_client_ctx = mock.AsyncMock()
+        mock_client_ctx.__aenter__.return_value.get.return_value = mock_response
+        mock_client_ctx.__aexit__.return_value = None
+
+        with mock.patch("httpx.AsyncClient", return_value=mock_client_ctx):
+            await fetcher._fetch()
+
         topics = registry.trending.get()
-        # New data should be present
-        assert any("示例" in t["title"] for t in topics)
+        assert any("新热搜" in t["title"] for t in topics)
 
     def test_stop(self, registry):
         fetcher = TrendingFetcher(registry)

@@ -5,8 +5,11 @@ Scheduler 模块 — 消息路由 + 主动循环 + Webhook 监听
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Callable, Dict, Optional
+
+import httpx
 
 from companion.modules.registry import CompanionRegistry
 
@@ -135,14 +138,23 @@ class TrendingFetcher:
                 await asyncio.sleep(self.fetch_interval)
 
     async def _fetch(self):
-        """执行预取（预留外部 API 接入点）"""
-        # Placeholder: integrate with actual trending API
-        # For now, just save some sample topics
-        sample_topics = [
-            {"title": "今日热点话题示例1"},
-            {"title": "今日热点话题示例2"},
-        ]
-        self.registry.trending.save(sample_topics)
+        """执行预取 — 百度热搜"""
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                r = await client.get(
+                    "https://top.baidu.com/board?tab=realtime",
+                    headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"},
+                )
+            html = r.text
+            topics = re.findall(r'"word":"([^"]+)"', html)
+            if topics:
+                result = [{"title": t} for t in topics[:20]]
+                self.registry.trending.save(result)
+                logger.info(f"Trending: fetched {len(result)} topics from Baidu")
+            else:
+                logger.warning("Trending: no topics found")
+        except Exception as e:
+            logger.error(f"Trending fetcher error: {e}")
 
     def stop(self):
         self._running = False
