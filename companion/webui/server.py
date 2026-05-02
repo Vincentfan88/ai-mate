@@ -207,14 +207,21 @@ async def _on_proactive_trigger(event: dict) -> None:
         with contextlib.redirect_stdout(buf):
             response = await wrapper._agent.run()
 
+        # 获取情绪
+        try:
+            emotion_info = wrapper.registry.emotion.get_current_emotion("time_passage")
+            current_emotion = emotion_info.get("emotion", "")
+        except Exception:
+            current_emotion = ""
+
         if response and not response.startswith("LLM call failed"):
             # 通过飞书发送
             if _feishu_bot and _feishu_bot.is_connected:
                 default_chat_id = _config.get("feishu_chat_id", "")
                 if default_chat_id:
                     await _feishu_bot._send_reply(default_chat_id, response)
-            # 广播到 WebUI
-            await _ws_broadcast({"type": "proactive", "content": response})
+            # 广播到 WebUI（含情绪信息）
+            await _ws_broadcast({"type": "proactive", "content": response, "emotion": current_emotion})
             # 活人感：记录主动联系
             if wrapper.registry:
                 wrapper.registry.liveness.record_initiated_contact()
@@ -805,10 +812,16 @@ async def websocket_chat(ws: WebSocket):
                 wrapper = _get_or_create_agent()
                 if wrapper.registry:
                     wrapper.registry.on_user_message()
+                    # 获取当前情绪，随消息一起发送
+                    try:
+                        emotion_info = wrapper.registry.emotion.get_current_emotion("user_message")
+                        current_emotion = emotion_info.get("emotion", "")
+                    except Exception:
+                        current_emotion = ""
 
                 response = await wrapper.run(user_text)
                 if response and not response.startswith("LLM call failed"):
-                    await ws.send_json({"type": "message", "content": response})
+                    await ws.send_json({"type": "message", "content": response, "emotion": current_emotion})
                 else:
                     await ws.send_json({"type": "error", "content": "抱歉，我出神了没听清… 能再说一遍吗？"})
             except Exception as e:

@@ -162,8 +162,9 @@ body {
 
 .chat-view.hidden { display: none; }
 
+/* ── Chat header with rich status ── */
 .chat-header {
-  padding: 16px 24px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -178,11 +179,32 @@ body {
   background: #22c55e;
   box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
   transition: background 0.3s, box-shadow 0.3s;
+  flex-shrink: 0;
 }
 
 .chat-header .status-text {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.chat-header .status-details {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.chat-header .status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 10px;
 }
 
 /* ── Welcome Screen ── */
@@ -260,7 +282,12 @@ body {
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 4px;
+}
+
+/* Message group spacing */
+.message-group {
+  margin-bottom: 12px;
 }
 
 .message {
@@ -270,13 +297,72 @@ body {
   animation: slideIn 0.3s var(--ease-out-expo);
 }
 
+/* Consecutive messages from same sender hide avatar/sender */
+.message.grouped {
+  margin-top: -2px;
+}
+.message.grouped .message-avatar,
+.message.grouped .message-sender {
+  visibility: hidden;
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.message.user { align-self: flex-end; flex-direction: row-reverse; }
+/* Send animation: user messages pop in from bottom */
+.message.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
 .message.ai { align-self: flex-start; }
+
+/* ── Message stream animation ── */
+.message-bubble.streaming {
+  position: relative;
+}
+.message-bubble.streaming::after {
+  content: '▊';
+  animation: cursorBlink 0.6s step-end infinite;
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+@keyframes cursorBlink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ── Action text styling ── */
+.message-bubble .action-text {
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.message-bubble .dialogue-text {
+  font-style: normal;
+}
+
+/* ── Emotion tag on AI messages ── */
+.emotion-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-glow);
+  border: 1px solid var(--accent-light);
+  font-size: 10px;
+  color: var(--accent-dark);
+  margin-top: 4px;
+}
 
 .message-avatar {
   width: 32px;
@@ -342,6 +428,27 @@ body {
   opacity: 0.6;
   padding: 0 4px;
 }
+
+/* ── Time separator between message groups ── */
+.time-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.time-separator::before,
+.time-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.time-separator::before { margin-right: 12px; }
+.time-separator::after { margin-left: 12px; }
 
 .message-status {
   font-size: 11px;

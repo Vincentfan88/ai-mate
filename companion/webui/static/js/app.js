@@ -5,6 +5,8 @@ let ws = null;
 let currentConfig = {};
 let messages = [];
 let messageCount = 0;
+let currentEmotion = '';  // AI current emotion for status bar
+let currentHmmState = '';  // HMM state for status bar
 
 // ── DOM refs ──
 const $ = (s) => document.querySelector(s);
@@ -468,7 +470,12 @@ function connectWebSocket() {
     switch (data.type) {
       case 'message':
         hideTyping();
-        addMessage(data.content, 'ai');
+        // If the server sent emotion/state info, update status
+        if (data.emotion) {
+          currentEmotion = data.emotion;
+          updateStatusDisplay();
+        }
+        streamMessage(data.content, 'ai');
         setOnline(true);
         break;
       case 'status':
@@ -476,12 +483,19 @@ function connectWebSocket() {
         break;
       case 'proactive':
         hideTyping();
-        addMessage(data.content, 'ai');
+        if (data.emotion) currentEmotion = data.emotion;
+        streamMessage(data.content, 'ai');
         break;
       case 'error':
         hideTyping();
         addMessage('😅 ' + data.content, 'ai');
         setOnline(true);
+        break;
+      case 'state':
+        // Background state update from server
+        if (data.emotion) currentEmotion = data.emotion;
+        if (data.hmm) currentHmmState = data.hmm;
+        updateStatusDisplay();
         break;
     }
   };
@@ -538,6 +552,134 @@ function hideWelcome() {
   }
 }
 
+// ── Message group tracking ──
+let lastSenderRole = null;
+let lastMessageTime = null;
+const GROUP_GAP_MS = 60000; // 1 min gap = new group
+
+// ── Streaming message (typing effect) ──
+function streamMessage(text, role) {
+  messageCount++;
+  hideWelcome();
+
+  const isGrouped = (role === lastSenderRole) &&
+    lastMessageTime && (Date.now() - lastMessageTime) < GROUP_GAP_MS;
+
+  const div = document.createElement('div');
+  div.className = `message ${role}` + (isGrouped ? ' grouped' : '');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'message-avatar';
+  const hasAvatar = currentConfig[`has_avatar_${role}`];
+  if (hasAvatar) {
+    avatar.innerHTML = `<img src="/api/avatar/${role}?t=${Date.now()}" class="avatar-img">`;
+  } else {
+    avatar.textContent = role === 'ai' ? '🌙' : '👤';
+  }
+
+  const content = document.createElement('div');
+  content.className = 'message-content';
+
+  if (!isGrouped) {
+    const sender = document.createElement('div');
+    sender.className = 'message-sender';
+    sender.textContent = getSenderName(role);
+    content.appendChild(sender);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message-bubble streaming';
+  content.appendChild(bubble);
+
+  const time = document.createElement('div');
+  time.className = 'message-time';
+  time.textContent = formatTime(new Date());
+  content.appendChild(time);
+
+  div.appendChild(avatar);
+  div.appendChild(content);
+  msgContainer.appendChild(div);
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+
+  // Typing animation with realistic rhythm
+  const speed = getTypingSpeed(text.length);
+  typeText(bubble, text, speed, () => {
+    bubble.classList.remove('streaming');
+    // Parse action text after typing completes
+    parseActionText(bubble);
+    // Add emotion tag for AI messages
+    if (role === 'ai' && currentEmotion) {
+      const tag = document.createElement('div');
+      tag.className = 'emotion-tag';
+      tag.textContent = currentEmotion;
+      bubble.parentNode.appendChild(tag);
+    }
+  });
+
+  lastSenderRole = role;
+  lastMessageTime = Date.now();
+}
+
+function getTypingSpeed(textLength) {
+  // Variable speed: ~15-30 chars/sec, slower for longer text
+  if (textLength < 20) return 40;  // ~25 chars/sec
+  if (textLength < 50) return 45;  // ~22 chars/sec
+  if (textLength < 100) return 55; // ~18 chars/sec
+  return 65; // ~15 chars/sec
+}
+
+function typeText(element, text, delay, callback) {
+  let i = 0;
+  // Handle punctuation pauses
+  const pauseChars = '。！？，、';
+  function type() {
+    if (i < text.length) {
+      element.textContent += text[i];
+      i++;
+      let currentDelay = delay;
+      // Pause at punctuation for natural rhythm
+      if (pauseChars.includes(text[i - 1])) {
+        currentDelay *= 3;
+      }
+      // Also pause at periods and commas (English)
+      if ('.!?,'.includes(text[i - 1])) {
+        currentDelay *= 2;
+      }
+      element.closest('.messages')?.scrollTo({
+        top: element.closest('.messages').scrollHeight,
+        behavior: 'smooth'
+      });
+      setTimeout(type, currentDelay);
+    } else {
+      if (callback) callback();
+    }
+  }
+  type();
+}
+
+function parseActionText(bubble) {
+  // Parse text in parentheses/brackets as action text
+  const rawText = bubble.textContent;
+  bubble.textContent = '';
+
+  // Match Chinese parentheses （）and English ()
+  const parts = rawText.split(/([（(][^）)]*[）)])/g);
+
+  parts.forEach(part => {
+    if (/^[（(].*[）)]$/.test(part)) {
+      const span = document.createElement('span');
+      span.className = 'action-text';
+      span.textContent = part;
+      bubble.appendChild(span);
+    } else if (part) {
+      const span = document.createElement('span');
+      span.className = 'dialogue-text';
+      span.textContent = part;
+      bubble.appendChild(span);
+    }
+  });
+}
+
 // ── UI Helpers ──
 function formatTime(date) {
   const h = date.getHours().toString().padStart(2, '0');
@@ -557,8 +699,11 @@ function addMessage(text, role) {
   messageCount++;
   hideWelcome();
 
+  const isGrouped = (role === lastSenderRole) &&
+    lastMessageTime && (Date.now() - lastMessageTime) < GROUP_GAP_MS;
+
   const div = document.createElement('div');
-  div.className = `message ${role}`;
+  div.className = `message ${role}` + (isGrouped ? ' grouped' : '');
 
   const avatar = document.createElement('div');
   avatar.className = 'message-avatar';
@@ -573,26 +718,40 @@ function addMessage(text, role) {
   const content = document.createElement('div');
   content.className = 'message-content';
 
-  const sender = document.createElement('div');
-  sender.className = 'message-sender';
-  sender.textContent = getSenderName(role);
+  if (!isGrouped) {
+    const sender = document.createElement('div');
+    sender.className = 'message-sender';
+    sender.textContent = getSenderName(role);
+    content.appendChild(sender);
+  }
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   bubble.textContent = text;
+  parseActionText(bubble);
+  content.appendChild(bubble);
 
   const time = document.createElement('div');
   time.className = 'message-time';
   time.textContent = formatTime(new Date());
-
-  content.appendChild(sender);
-  content.appendChild(bubble);
   content.appendChild(time);
 
   div.appendChild(avatar);
   div.appendChild(content);
   msgContainer.appendChild(div);
   msgContainer.scrollTop = msgContainer.scrollHeight;
+
+  lastSenderRole = role;
+  lastMessageTime = Date.now();
+}
+
+function updateStatusDisplay() {
+  const mbti = currentConfig.mbti || 'ENFP';
+  if (currentEmotion) {
+    statusText.textContent = `在线 · ${mbti} · ${currentEmotion}`;
+  } else {
+    statusText.textContent = `在线 · ${mbti}`;
+  }
 }
 
 function addSystemMessage(text) {
@@ -647,7 +806,11 @@ function hideTyping() {
 function setOnline(online) {
   statusDot.style.background = online ? '#22c55e' : '#ef4444';
   statusDot.style.boxShadow = online ? '0 0 6px rgba(34, 197, 94, 0.4)' : 'none';
-  statusText.textContent = online ? `在线 · ${currentConfig.mbti || 'ENFP'}` : '思考中…';
+  if (online) {
+    updateStatusDisplay();
+  } else {
+    statusText.textContent = '思考中…';
+  }
 }
 
 function showToast(msg) {
