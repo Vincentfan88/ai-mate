@@ -63,6 +63,38 @@ _agent_ref = None  # (config_hash, SilentAgentWrapper)
 # 飞书 Bot 实例
 _feishu_bot = None
 
+# 配置持久化文件路径
+CONFIG_FILE = Path("workspace/companion/config.json")
+
+
+def _load_config() -> None:
+    """从磁盘加载配置（覆盖默认值）"""
+    global _config
+    if CONFIG_FILE.exists():
+        try:
+            saved = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            # 只覆盖已保存的键，保留默认结构
+            for k, v in saved.items():
+                if k in _config:
+                    _config[k] = v
+            logger.info(f"配置已从磁盘加载: {CONFIG_FILE}")
+        except Exception as e:
+            logger.warning(f"配置加载失败，使用默认值: {e}")
+
+
+def _save_config() -> None:
+    """将当前配置写入磁盘"""
+    try:
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # 排除敏感字段（api_key、feishu_app_secret）
+        safe_config = {k: v for k, v in _config.items()}
+        CONFIG_FILE.write_text(
+            json.dumps(safe_config, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.error(f"配置保存失败: {e}")
+
 # 主动触发实例
 _proactive_loop = None
 
@@ -242,6 +274,9 @@ async def _on_proactive_trigger(event: dict) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _proactive_loop
+
+    # 从磁盘加载配置
+    _load_config()
 
     # 启动飞书 Bot
     _start_feishu_bot()
@@ -737,6 +772,9 @@ async def update_config(body: dict):
     if feishu_changed:
         _stop_feishu_bot()
         _start_feishu_bot()
+
+    # 持久化到磁盘
+    _save_config()
 
     return {"status": "ok", "config": _config}
 
