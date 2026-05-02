@@ -1,6 +1,7 @@
 """8 种情绪 + 强度二维模型核心模块。"""
 
 import json
+import logging
 import random
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -9,6 +10,8 @@ from .circadian import compute_circadian
 from .event_impact import get_event_bonus
 from .contagion import compute_contagion
 from .residue import EmotionResidue
+
+logger = logging.getLogger(__name__)
 
 # 情绪之间的"距离"矩阵 — 相近情绪过渡平滑，远距离情绪变化突兀
 _EMOTION_DISTANCE: Dict[str, Dict[str, float]] = {

@@ -1,6 +1,7 @@
 """触发引擎模块 — Weibull + HMM + HardFilter + 两阶段拟人化决策。"""
 
 import json
+import logging
 import random
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,8 @@ from typing import Optional
 from .weibull import weibull_sample, compute_hour_bonus
 from .hmm_state_machine import CompanionState, HMMStateMachine
 from .hard_filter import HardFilter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -69,6 +72,7 @@ class TriggerEngine:
         # 1. Hard filter
         passed, reason = self.hard_filter.check(now=now)
         if not passed:
+            logger.debug(f"Hard filter blocked: {reason}")
             return TriggerDecision(
                 should_trigger=False,
                 pull="",
@@ -109,6 +113,13 @@ class TriggerEngine:
 
         should_trigger = score >= threshold_low
         strong_trigger = score >= threshold_high
+
+        logger.debug(
+            f"Trigger compute: score={score:.3f}, state={state}({state_weight:.3f}), "
+            f"hour_bonus={hour_bonus_val:.3f}, impulse={impulse:.3f}, "
+            f"threshold_low={threshold_low}, threshold_high={threshold_high}, "
+            f"should_trigger={should_trigger}"
+        )
 
         # === Stage 2: Anthropomorphic output ===
         pull, hold_back, nudge = self._anthropomorphize(

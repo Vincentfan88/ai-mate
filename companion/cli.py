@@ -13,6 +13,7 @@
 
 import argparse
 import asyncio
+import logging
 import sys
 import time
 from pathlib import Path
@@ -29,6 +30,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workspace", default="workspace/companion", help="运行时数据目录")
     parser.add_argument("--persona", default="default", help="人格配置文件名 (companion/skills/companion/{name}.json)")
     parser.add_argument("--max-steps", type=int, default=5, help="每轮最大执行步数")
+    parser.add_argument("--log-level", default="INFO", help="日志级别 (默认: INFO)")
+    parser.add_argument("--no-log-file", action="store_true", help="不写日志文件")
+    parser.add_argument("--budget", type=float, default=0, help="Token 费用预算上限 (元, 0=不限)")
     return parser.parse_args()
 
 
@@ -64,6 +68,7 @@ def build_companion_agent(
         CompanionTrendingTool,
     )
     from companion.agent.persona import load_persona, build_system_prompt
+    from companion.token_tracker import token_tracker
 
     # 1. 创建模块注册表
     registry = CompanionRegistry(
@@ -101,7 +106,22 @@ def build_companion_agent(
         CompanionTrendingTool(registry),
     ]
 
-    # 5. 创建 Agent
+    # 5. 创建 Agent — 包装 generate 以记录 token
+    original_generate = llm.generate
+
+    async def _tracked_generate(*args, **kwargs):
+        response = await original_generate(*args, **kwargs)
+        if response.usage:
+            token_tracker.record(
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                model=model,
+            )
+        return response
+
+    llm.generate = _tracked_generate
+
+    # 6. 创建 Agent
     agent = Agent(
         llm_client=llm,
         system_prompt=system_prompt,
@@ -116,8 +136,10 @@ def build_companion_agent(
 # ── 交互式会话 ──────────────────────────────────────────────────
 
 
-async def run_interactive_session(agent, registry, persona: dict) -> None:
+async def run_interactive_session(agent, registry, persona: dict, budget: float = 0) -> None:
     """启动交互式对话循环。"""
+    from companion.token_tracker import token_tracker
+
     name = persona.get("name", "伴侣")
     greeting = persona.get("greeting", "")
 
@@ -129,9 +151,12 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
     print(f"  模型:  {agent.llm.model}")
     print(f"  API:   {agent.llm.api_base}")
     print(f"  工作区: {agent.workspace_dir}")
+    if budget > 0:
+        print(f"  预算:  ¥{budget:.2f}")
     print("=" * 60)
     print("  /state  — 查看完整状态")
     print("  /save   — 保存当前情绪")
+    print("  /tokens — 查看 token 消耗统计")
     print("  /exit   — 退出")
     print("-" * 60)
 
@@ -141,6 +166,16 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
         print(f"  {greeting}")
 
     while True:
+        # 预算检查
+        if budget > 0:
+            budget_status = token_tracker.check_budget(budget)
+            if budget_status["exceeded"]:
+                print(f"\n⚠️ 预算已超出！已用 ¥{budget_status['spent']:.4f} / ¥{budget:.2f}")
+                print("请增加预算或结束会话。")
+                continue
+            elif budget_status["warning"]:
+                print(f"\n⚠️ 预算警告：已用 ¥{budget_status['spent']:.4f} / ¥{budget:.2f} ({budget_status['percentage']:.0f}%)")
+
         try:
             user_input = input(f"\n你 > ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -167,6 +202,17 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
             registry.emotion.save_residue()
             print("✅ 情绪残留已保存")
             continue
+        elif user_input == "/tokens":
+            stats = token_tracker.get_stats()
+            print(f"\n📊 Token 消耗统计")
+            print(f"  总调用: {stats['total_calls']} 次")
+            print(f"  总 Token: {stats['total_tokens']:,} (输入: {stats['total_prompt_tokens']:,}, 输出: {stats['total_completion_tokens']:,})")
+            print(f"  总费用: ¥{stats['total_cost']:.4f}")
+            if stats['model_breakdown']:
+                print(f"  按模型:")
+                for model_name, mstats in stats['model_breakdown'].items():
+                    print(f"    {model_name}: {mstats['calls']} 次, {mstats['total_tokens']:,} tokens, ¥{mstats['cost']:.4f}")
+            continue
 
         # 将用户消息持久化
         registry.memory.add_conversation("user", user_input)
@@ -182,6 +228,7 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
                 print(f"\n💕 {name} [{elapsed:.1f}s]:")
                 print(f"  {result}")
         except Exception as e:
+            logging.getLogger("companion").error(f"会话错误: {e}")
             print(f"\n❌ 出错了: {e}")
 
 
@@ -190,6 +237,14 @@ async def run_interactive_session(agent, registry, persona: dict) -> None:
 
 async def main():
     args = parse_args()
+
+    # 初始化日志系统
+    log_file = None if args.no_log_file else f"{args.workspace}/companion.log"
+    from companion.logger import setup_logger
+    setup_logger(level=args.log_level, log_file=log_file)
+
+    logger = logging.getLogger("companion")
+    logger.info(f"CLI 启动: mbti={args.mbti}, model={args.model}, persona={args.persona}")
 
     try:
         agent, registry, persona = build_companion_agent(
@@ -202,10 +257,19 @@ async def main():
             max_steps=args.max_steps,
         )
     except Exception as e:
+        logger.error(f"初始化失败: {e}", exc_info=True)
         print(f"❌ 初始化失败: {e}")
         sys.exit(1)
 
-    await run_interactive_session(agent, registry, persona)
+    logger.info(f"Agent 构建完成, tools: {list(agent.tools.keys())}")
+
+    await run_interactive_session(agent, registry, persona, budget=args.budget)
+
+    # 会话结束统计
+    from companion.token_tracker import token_tracker
+    stats = token_tracker.get_stats()
+    if stats["total_calls"] > 0:
+        print(f"\n📊 会话统计: {stats['total_calls']} 次调用, {stats['total_tokens']:,} tokens, ¥{stats['total_cost']:.4f}")
 
     # 会话结束时保存情绪残留
     try:
