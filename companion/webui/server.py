@@ -25,10 +25,15 @@ _config = {
     "mbti": "ENFP",
     "persona": "default",
     "model": "deepseek-v4-flash",
-    "api_base": "http://127.0.0.1:15721",
-    "api_key": "cc-switch-proxy",
+    "api_base": "https://api.deepseek.com/v1",
+    "api_key": "",
     "max_steps": 5,
     "workspace": "workspace/companion",
+    # 本地模型
+    "local_model_enabled": False,
+    "local_model": "qwen3-4b",
+    "local_api_base": "http://127.0.0.1:1234/v1",
+    # 飞书
     "feishu_app_id": "",
     "feishu_app_secret": "",
     "feishu_enabled": False,
@@ -439,6 +444,9 @@ async def get_config():
 async def update_config(body: dict):
     global _config
     for k in ("mbti", "persona", "model", "api_base", "api_key", "max_steps", "workspace"):
+        if k in body:
+            _config[k] = body[k]
+    for k in ("local_model_enabled", "local_model", "local_api_base"):
         if k in body:
             _config[k] = body[k]
     # 下次请求时自动重建 agent

@@ -78,12 +78,39 @@
           <div class="setting-group">
             <label>模型</label>
             <input type="text" id="inputModel" placeholder="deepseek-v4-flash">
-            <div class="hint">LLM 模型名称</div>
+            <div class="hint">云端 LLM 模型名称（用于偏好推断等高智商场景）</div>
           </div>
           <div class="setting-group">
             <label>API 地址</label>
-            <input type="text" id="inputApiBase" placeholder="http://127.0.0.1:15721">
-            <div class="hint">API 端点地址</div>
+            <input type="text" id="inputApiBase" placeholder="https://api.deepseek.com/v1">
+            <div class="hint">云端 API 端点地址</div>
+          </div>
+          <div class="setting-group">
+            <label>API Key</label>
+            <input type="password" id="inputApiKey" placeholder="sk-xxxxxxxxxxxxxxxx">
+            <div class="hint">云端 API 密钥（不保存，仅内存存储）</div>
+          </div>
+          <div class="setting-divider"></div>
+          <div class="setting-group">
+            <label>本地模型</label>
+            <div class="toggle-row">
+              <label class="toggle-label" for="localModelToggle">启用</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="localModelToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="hint">日常对话使用本地小模型，隐私好、成本低</div>
+          </div>
+          <div class="setting-group">
+            <label>本地模型地址</label>
+            <input type="text" id="inputLocalApiBase" placeholder="http://127.0.0.1:1234/v1">
+            <div class="hint">本地 LLM 的 OpenAI 兼容端点</div>
+          </div>
+          <div class="setting-group">
+            <label>本地模型名称</label>
+            <input type="text" id="inputLocalModel" placeholder="qwen3-4b">
+            <div class="hint">本地部署的小模型名称（如 qwen3-4b）</div>
           </div>
           <div class="setting-divider"></div>
           <div class="setting-group">

@@ -74,7 +74,11 @@ async function saveSettings() {
     persona: document.getElementById('selPersona').value,
     mbti: document.getElementById('selMbti').value,
     model: document.getElementById('inputModel').value || 'deepseek-v4-flash',
-    api_base: document.getElementById('inputApiBase').value || 'http://127.0.0.1:15721',
+    api_base: document.getElementById('inputApiBase').value || 'https://api.deepseek.com/v1',
+    api_key: document.getElementById('inputApiKey').value || '',
+    local_model_enabled: document.getElementById('localModelToggle').checked,
+    local_model: document.getElementById('inputLocalModel').value || 'qwen3-4b',
+    local_api_base: document.getElementById('inputLocalApiBase').value || 'http://127.0.0.1:1234/v1',
     feishu_enabled: document.getElementById('feishuToggle').checked,
     feishu_app_id: document.getElementById('feishuAppId').value || '',
     feishu_app_secret: document.getElementById('feishuAppSecret').value || '',
@@ -249,6 +253,12 @@ async function loadSettingsForm() {
   document.getElementById('selMbti').value = currentConfig.mbti || 'ENFP';
   document.getElementById('inputModel').value = currentConfig.model || '';
   document.getElementById('inputApiBase').value = currentConfig.api_base || '';
+  document.getElementById('inputApiKey').value = currentConfig.api_key || '';
+
+  // 本地模型设置
+  document.getElementById('localModelToggle').checked = currentConfig.local_model_enabled || false;
+  document.getElementById('inputLocalModel').value = currentConfig.local_model || '';
+  document.getElementById('inputLocalApiBase').value = currentConfig.local_api_base || '';
 
   // 飞书设置
   document.getElementById('feishuToggle').checked = currentConfig.feishu_enabled || false;
