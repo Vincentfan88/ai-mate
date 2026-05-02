@@ -1,5 +1,6 @@
 """Companion 模块注册表 — 统一管理所有模块实例。"""
 
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from companion.modules.memory import MemorySystem
@@ -124,3 +125,17 @@ class CompanionRegistry:
 
     def get_module(self, name: str) -> Optional[object]:
         return self._modules.get(name)
+
+    # ── HMM / HardFilter 便捷通知 ───────────────────────────────
+
+    def on_user_message(self, now: Optional[datetime] = None) -> None:
+        """通知 HMM 用户发来消息（切换到 ACTIVE 状态）。"""
+        self.trigger.hmm.on_user_message(now)
+
+    def exit_conversation(self) -> str:
+        """通知 HMM 对话结束（概率转移），返回新的状态名。"""
+        return self.trigger.hmm.exit_conversation()
+
+    def record_contact(self, timestamp: Optional[datetime] = None) -> None:
+        """记录一次主动联系（更新 HardFilter 接触计数器）。"""
+        self.trigger.hard_filter.record_contact(timestamp)

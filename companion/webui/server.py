@@ -1,5 +1,7 @@
 """AI 伴侣 WebUI 服务器 — FastAPI + WebSocket。"""
 
+import asyncio
+import contextlib
 import io
 import json
 import struct
@@ -37,6 +39,13 @@ _agent_ref = None  # (config_hash, SilentAgentWrapper)
 
 # 飞书 Bot 实例
 _feishu_bot = None
+
+# 主动触发 + 消息路由实例
+_proactive_loop = None
+_message_router = None
+
+# WebSocket 连接的客户端集合
+_ws_clients: list = []
 
 
 def _config_hash() -> str:
@@ -118,16 +127,89 @@ def _get_or_create_agent_wrapper() -> SilentAgentWrapper:
     return _get_or_create_agent()
 
 
+# ── 主动触发 + 消息路由 ────────────────────────────────────────
+
+
+async def _ws_broadcast(msg: dict) -> None:
+    """向所有 WebSocket 客户端广播消息。"""
+    for client in list(_ws_clients):
+        try:
+            await client.send_json(msg)
+        except Exception:
+            pass
+
+
+async def _on_proactive_trigger(event: dict) -> None:
+    """ProactiveLoop 回调 — 生成主动消息并发送。"""
+    from companion.scheduler import ProactiveLoop as PL  # 延迟导入避免循环
+
+    decision = event["decision"]
+    wrapper = _get_or_create_agent()
+    registry = wrapper.registry if wrapper else None
+
+    # 构造触发上下文提示词
+    prompt = (
+        f"你当前的状态：{decision['state']}，冲动：{decision['nudge']}，"
+        f"想联系他的理由：{decision['pull']}，忍住的理由：{decision['hold_back']}。"
+        f"基于以上状态，用符合人格的方式自然地发起一段对话，可以分享一个想法或感受，"
+        f"不要太长，一句话就好。不要生硬。"
+    )
+
+    try:
+        wrapper._agent.add_user_message(prompt)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            response = await wrapper._agent.run()
+
+        # 清理注入的提示词（不出现在对话历史中）
+        if hasattr(wrapper._agent, "_history") and wrapper._agent._history:
+            wrapper._agent._history.pop()
+
+        if response and not response.startswith("LLM call failed"):
+            # 通过飞书发送
+            if _feishu_bot and _feishu_bot.is_connected:
+                default_chat_id = _config.get("feishu_default_chat_id", "")
+                if default_chat_id:
+                    await _feishu_bot._send_reply(default_chat_id, response)
+            # 广播到 WebUI
+            await _ws_broadcast({"type": "proactive", "content": response})
+            logger.info(f"[Proactive] 主动发送: {response[:50]}")
+        elif response:
+            logger.warning(f"[Proactive] LLM 拒绝响应")
+    except Exception as e:
+        logger.error(f"[Proactive] 主动触发失败: {e}")
+
+
 # ── FastAPI 应用 ──────────────────────────────────────────────
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时预热
+    global _proactive_loop, _message_router
+
+    # 启动飞书 Bot
     _start_feishu_bot()
+
+    # 启动主动触发循环 + 热搜预取
+    from companion.scheduler import ProactiveLoop, TrendingFetcher
+    registry = _get_or_create_agent().registry if _get_or_create_agent() else None
+    if registry:
+        _proactive_loop = ProactiveLoop(registry, on_trigger=_on_proactive_trigger)
+        asyncio.create_task(_proactive_loop.run())
+        fetcher = TrendingFetcher(registry)
+        asyncio.create_task(fetcher.run())
+        logger.info("主动触发循环已启动")
+
     yield
+
     # 清理
     _stop_feishu_bot()
+    if _proactive_loop:
+        _proactive_loop.stop()
+        _proactive_loop = None
+    if _message_router:
+        _message_router.stop()
+        _message_router = None
     global _agent_ref
     _agent_ref = None
 
@@ -400,6 +482,7 @@ async def feishu_status():
 @app.websocket("/ws/chat")
 async def websocket_chat(ws: WebSocket):
     await ws.accept()
+    _ws_clients.append(ws)
     try:
         while True:
             data = await ws.receive_text()
@@ -414,11 +497,23 @@ async def websocket_chat(ws: WebSocket):
             # 获取 agent 并执行
             try:
                 wrapper = _get_or_create_agent()
+                # 通知 HMM 有用户消息
+                if wrapper.registry:
+                    wrapper.registry.on_user_message()
+
                 response = await wrapper.run(user_text)
                 if response and not response.startswith("LLM call failed"):
                     await ws.send_json({"type": "message", "content": response})
                 else:
                     await ws.send_json({"type": "error", "content": "抱歉，我出神了没听清… 能再说一遍吗？"})
+
+                # 更新 HMM 状态
+                if wrapper.registry:
+                    try:
+                        wrapper.registry.record_contact()
+                        wrapper.registry.exit_conversation()
+                    except Exception:
+                        pass
             except Exception as e:
                 logging.getLogger("companion").error(f"WebSocket 错误: {e}", exc_info=True)
                 await ws.send_json({"type": "error", "content": "抱歉，我出错了… 请稍后再试。"})
@@ -427,6 +522,9 @@ async def websocket_chat(ws: WebSocket):
         pass
     except Exception:
         pass
+    finally:
+        if ws in _ws_clients:
+            _ws_clients.remove(ws)
 
 
 # 静态文件

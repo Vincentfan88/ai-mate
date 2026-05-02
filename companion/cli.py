@@ -138,10 +138,31 @@ def build_companion_agent(
 
 async def run_interactive_session(agent, registry, persona: dict, budget: float = 0) -> None:
     """启动交互式对话循环。"""
-    from companion.token_tracker import token_tracker
+    import threading
+    from companion.scheduler import ProactiveLoop, TrendingFetcher
 
+    from companion.token_tracker import token_tracker
     name = persona.get("name", "伴侣")
     greeting = persona.get("greeting", "")
+
+    # 在后台线程运行主动触发循环（日志记录触发决策，不主动发消息）
+    def _run_proactive():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        def _log_trigger(event: dict):
+            d = event["decision"]
+            logger.info(
+                f"[Proactive] state={d['state']} nudge={d['nudge']} "
+                f"pull={d['pull']} hold_back={d['hold_back']}"
+            )
+
+        proactive = ProactiveLoop(registry, on_trigger=_log_trigger)
+        fetcher = TrendingFetcher(registry)
+        loop.run_until_complete(asyncio.gather(proactive.run(), fetcher.run()))
+
+    proactive_thread = threading.Thread(target=_run_proactive, daemon=True, name="proactive-loop")
+    proactive_thread.start()
 
     print("\n" + "=" * 60)
     print(f"  💕 {name} — AI 伴侣 v2.0")
@@ -216,6 +237,8 @@ async def run_interactive_session(agent, registry, persona: dict, budget: float 
 
         # 将用户消息持久化
         registry.memory.add_conversation("user", user_input)
+        # 通知 HMM：用户发来消息
+        registry.on_user_message()
         agent.add_user_message(user_input)
 
         try:
@@ -225,6 +248,9 @@ async def run_interactive_session(agent, registry, persona: dict, budget: float 
             if result:
                 # 持久化 AI 回复
                 registry.memory.add_conversation("assistant", result)
+                # 记录接触 + 通知 HMM 对话结束
+                registry.record_contact()
+                registry.exit_conversation()
                 print(f"\n💕 {name} [{elapsed:.1f}s]:")
                 print(f"  {result}")
         except Exception as e:
