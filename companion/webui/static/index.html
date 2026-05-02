@@ -18,14 +18,8 @@
         <button class="nav-item active" data-view="chat" onclick="switchView('chat')">
           <span class="icon">💬</span> 对话
         </button>
-        <button class="nav-item" data-view="settings-persona" onclick="switchView('settings-persona')">
-          <span class="icon">🎭</span> 人物设定
-        </button>
-        <button class="nav-item" data-view="settings-model" onclick="switchView('settings-model')">
-          <span class="icon">🧠</span> 模型设定
-        </button>
-        <button class="nav-item" data-view="settings-im" onclick="switchView('settings-im')">
-          <span class="icon">📱</span> IM 设置
+        <button class="nav-item" data-view="settings" onclick="switchView('settings')">
+          <span class="icon">⚙️</span> 设置
         </button>
         <button class="nav-item" data-view="about" onclick="switchView('about')">
           <span class="icon">ℹ️</span> 关于
@@ -51,175 +45,250 @@
         </div>
       </div>
 
-      <!-- 人物设定 -->
-      <div class="settings-view" id="settingsPersonaView">
+      <!-- 设置（折叠面板） -->
+      <div class="settings-view" id="settingsView">
         <div class="settings-header">
-          <h2>🎭 AI 人物设定</h2>
+          <h2>⚙️ 设置</h2>
         </div>
         <div class="settings-body">
-          <div class="setting-group">
-            <label>人格</label>
-            <select id="selPersona"></select>
-            <div class="hint">选择 AI 伴侣的人格设定</div>
-          </div>
-          <div class="setting-group">
-            <label>MBTI 类型</label>
-            <select id="selMbti">
-              <option value="ENFP">ENFP 自由者</option>
-              <option value="INFP">INFP 理想者</option>
-              <option value="ENTP">ENTP 辩论家</option>
-              <option value="INTP">INTP 思考者</option>
-              <option value="ENFJ">ENFJ 主人公</option>
-              <option value="INFJ">INFJ 倡导者</option>
-              <option value="ENTJ">ENTJ 指挥官</option>
-              <option value="INTJ">INTJ 策划者</option>
-              <option value="ESFP">ESFP 表演者</option>
-              <option value="ISFP">ISFP 探险家</option>
-              <option value="ESTP">ESTP 创业者</option>
-              <option value="ISTP">ISTP 巧匠</option>
-              <option value="ESFJ">ESFJ 照顾者</option>
-              <option value="ISFJ">ISFJ 守护者</option>
-              <option value="ESTJ">ESTJ 管家</option>
-              <option value="ISTJ">ISTJ 物流师</option>
-            </select>
-            <div class="hint">影响沟通风格和情绪表达（共 16 种）</div>
-          </div>
-          <div class="setting-divider"></div>
-          <div class="setting-group">
-            <label>AI 头像</label>
-            <div class="avatar-row">
-              <div class="avatar-preview" id="aiAvatarPreview">
-                <span class="avatar-placeholder">🤖</span>
-              </div>
-              <div class="avatar-actions">
-                <input type="file" id="aiAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('ai', this)">
-                <button class="btn-secondary" onclick="document.getElementById('aiAvatarInput').click()">上传</button>
-                <button class="btn-secondary btn-danger" id="aiAvatarDeleteBtn" onclick="deleteAvatar('ai')" style="display:none">删除</button>
-              </div>
-            </div>
-          </div>
-          <div class="setting-group">
-            <label>我的头像</label>
-            <div class="avatar-row">
-              <div class="avatar-preview" id="userAvatarPreview">
-                <span class="avatar-placeholder">👤</span>
-              </div>
-              <div class="avatar-actions">
-                <input type="file" id="userAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('user', this)">
-                <button class="btn-secondary" onclick="document.getElementById('userAvatarInput').click()">上传</button>
-                <button class="btn-secondary btn-danger" id="userAvatarDeleteBtn" onclick="deleteAvatar('user')" style="display:none">删除</button>
-              </div>
-            </div>
-          </div>
-          <div class="setting-divider"></div>
-          <div class="setting-group">
-            <label>角色卡导入</label>
-            <div class="file-upload-row">
-              <input type="file" id="fileInput" accept=".png,.json" class="file-input-hidden">
-              <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">选择文件</button>
-              <span class="file-name" id="fileName">未选择文件</span>
-            </div>
-            <button class="btn-primary" id="importBtn" onclick="importCharacter()" disabled>导入角色卡</button>
-            <div class="hint">支持酒馆标准角色卡（.png / .json）</div>
-          </div>
-          <div class="setting-actions">
-            <button class="btn-primary" onclick="saveAllSettings()">保存并重启</button>
-            <button class="btn-secondary" onclick="reloadSession()">重建会话</button>
-          </div>
-        </div>
-      </div>
 
-      <!-- 模型设定 -->
-      <div class="settings-view" id="settingsModelView">
-        <div class="settings-header">
-          <h2>🧠 模型设定</h2>
-        </div>
-        <div class="settings-body">
-          <div class="setting-group">
-            <label>云端模型</label>
-            <input type="text" id="inputModel" placeholder="deepseek-v4-flash">
-            <div class="hint">云端 LLM 模型名称（用于偏好推断等高智商场景）</div>
-          </div>
-          <div class="setting-group">
-            <label>云端 API 地址</label>
-            <input type="text" id="inputApiBase" placeholder="https://api.deepseek.com/v1">
-            <div class="hint">云端 API 端点地址</div>
-          </div>
-          <div class="setting-group">
-            <label>云端 API Key</label>
-            <input type="password" id="inputApiKey" placeholder="sk-xxxxxxxxxxxxxxxx">
-            <div class="hint">云端 API 密钥（不持久化，仅内存存储）</div>
-          </div>
-          <div class="setting-divider"></div>
-          <div class="setting-group">
-            <label>本地模型</label>
-            <div class="toggle-row">
-              <label class="toggle-label" for="localModelToggle">启用</label>
-              <label class="toggle-switch">
-                <input type="checkbox" id="localModelToggle">
-                <span class="toggle-slider"></span>
-              </label>
+          <!-- 人物设定 -->
+          <details class="setting-section" id="secPersona">
+            <summary class="section-title">
+              <span class="section-icon">🎭</span>
+              <span>人物设定</span>
+              <span class="section-arrow">▾</span>
+            </summary>
+            <div class="section-content">
+              <div class="setting-group">
+                <label>人格</label>
+                <select id="selPersona"></select>
+                <div class="hint">选择 AI 伴侣的人格设定</div>
+              </div>
+              <div class="setting-group">
+                <label>MBTI 类型</label>
+                <select id="selMbti">
+                  <option value="ENFP">ENFP 自由者</option>
+                  <option value="INFP">INFP 理想者</option>
+                  <option value="ENTP">ENTP 辩论家</option>
+                  <option value="INTP">INTP 思考者</option>
+                  <option value="ENFJ">ENFJ 主人公</option>
+                  <option value="INFJ">INFJ 倡导者</option>
+                  <option value="ENTJ">ENTJ 指挥官</option>
+                  <option value="INTJ">INTJ 策划者</option>
+                  <option value="ESFP">ESFP 表演者</option>
+                  <option value="ISFP">ISFP 探险家</option>
+                  <option value="ESTP">ESTP 创业者</option>
+                  <option value="ISTP">ISTP 巧匠</option>
+                  <option value="ESFJ">ESFJ 照顾者</option>
+                  <option value="ISFJ">ISFJ 守护者</option>
+                  <option value="ESTJ">ESTJ 管家</option>
+                  <option value="ISTJ">ISTJ 物流师</option>
+                </select>
+                <div class="hint">影响沟通风格和情绪表达（共 16 种）</div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-group">
+                <label>AI 头像</label>
+                <div class="avatar-row">
+                  <div class="avatar-preview" id="aiAvatarPreview">
+                    <span class="avatar-placeholder">🤖</span>
+                  </div>
+                  <div class="avatar-actions">
+                    <input type="file" id="aiAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('ai', this)">
+                    <button class="btn-secondary" onclick="document.getElementById('aiAvatarInput').click()">上传</button>
+                    <button class="btn-secondary btn-danger" id="aiAvatarDeleteBtn" onclick="deleteAvatar('ai')" style="display:none">删除</button>
+                  </div>
+                </div>
+              </div>
+              <div class="setting-group">
+                <label>我的头像</label>
+                <div class="avatar-row">
+                  <div class="avatar-preview" id="userAvatarPreview">
+                    <span class="avatar-placeholder">👤</span>
+                  </div>
+                  <div class="avatar-actions">
+                    <input type="file" id="userAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('user', this)">
+                    <button class="btn-secondary" onclick="document.getElementById('userAvatarInput').click()">上传</button>
+                    <button class="btn-secondary btn-danger" id="userAvatarDeleteBtn" onclick="deleteAvatar('user')" style="display:none">删除</button>
+                  </div>
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="setting-group">
+                <label>角色卡导入</label>
+                <div class="file-upload-row">
+                  <input type="file" id="fileInput" accept=".png,.json" class="file-input-hidden">
+                  <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">选择文件</button>
+                  <span class="file-name" id="fileName">未选择文件</span>
+                </div>
+                <button class="btn-primary" id="importBtn" onclick="importCharacter()" disabled>导入角色卡</button>
+                <div class="hint">支持酒馆标准角色卡（.png / .json）</div>
+              </div>
             </div>
-            <div class="hint">日常对话使用本地小模型，隐私好、成本低</div>
-          </div>
-          <div class="setting-group">
-            <label>本地模型地址</label>
-            <input type="text" id="inputLocalApiBase" placeholder="http://127.0.0.1:1234/v1">
-            <div class="hint">本地 LLM 的 OpenAI 兼容端点</div>
-          </div>
-          <div class="setting-group">
-            <label>本地模型名称</label>
-            <input type="text" id="inputLocalModel" placeholder="qwen3-4b">
-            <div class="hint">本地部署的小模型名称（如 qwen3-4b）</div>
-          </div>
-          <div class="setting-actions">
-            <button class="btn-primary" onclick="saveAllSettings()">保存并重启</button>
-            <button class="btn-secondary" onclick="reloadSession()">重建会话</button>
-          </div>
-        </div>
-      </div>
+          </details>
 
-      <!-- IM 设置 -->
-      <div class="settings-view" id="settingsImView">
-        <div class="settings-header">
-          <h2>📱 IM 设置</h2>
-        </div>
-        <div class="settings-body">
-          <div class="setting-group">
-            <label>飞书 Bot</label>
-            <div class="toggle-row">
-              <label class="toggle-label" for="feishuToggle">启用</label>
-              <label class="toggle-switch">
-                <input type="checkbox" id="feishuToggle">
-                <span class="toggle-slider"></span>
-              </label>
+          <!-- 模型设定 -->
+          <details class="setting-section" id="secModel">
+            <summary class="section-title">
+              <span class="section-icon">🧠</span>
+              <span>模型设定</span>
+              <span class="section-arrow">▾</span>
+            </summary>
+            <div class="section-content">
+              <div class="subsection-label">☁️ 云端模型</div>
+              <div class="setting-group">
+                <label>模型名称</label>
+                <input type="text" id="inputModel" placeholder="deepseek-v4-flash">
+              </div>
+              <div class="setting-group">
+                <label>API 地址</label>
+                <input type="text" id="inputApiBase" placeholder="https://api.deepseek.com/v1">
+              </div>
+              <div class="setting-group">
+                <label>API Key</label>
+                <input type="password" id="inputApiKey" placeholder="sk-xxxxxxxxxxxxxxxx">
+                <div class="hint">不持久化，仅内存存储</div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="subsection-label">💰 云端模型费用（元/百万 token）</div>
+              <div class="setting-row-2">
+                <div class="setting-group">
+                  <label>输入价格</label>
+                  <input type="number" id="inputCloudPriceIn" placeholder="1.0" step="0.1" min="0">
+                </div>
+                <div class="setting-group">
+                  <label>输出价格</label>
+                  <input type="number" id="inputCloudPriceOut" placeholder="4.0" step="0.1" min="0">
+                </div>
+              </div>
+              <div class="setting-divider"></div>
+              <div class="subsection-label">🖥️ 本地模型</div>
+              <div class="setting-group">
+                <div class="toggle-row">
+                  <label class="toggle-label" for="localModelToggle">启用</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="localModelToggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="hint">日常对话使用本地小模型，隐私好、成本低</div>
+              </div>
+              <div class="setting-row-2">
+                <div class="setting-group">
+                  <label>模型名称</label>
+                  <input type="text" id="inputLocalModel" placeholder="qwen3-4b">
+                </div>
+                <div class="setting-group">
+                  <label>API 地址</label>
+                  <input type="text" id="inputLocalApiBase" placeholder="http://127.0.0.1:1234/v1">
+                </div>
+              </div>
             </div>
-            <div class="hint">通过飞书长连接与 AI 伴侣对话</div>
-          </div>
-          <div class="setting-group">
-            <label>App ID</label>
-            <input type="text" id="feishuAppId" placeholder="飞书开放平台 App ID">
-          </div>
-          <div class="setting-group">
-            <label>App Secret</label>
-            <input type="password" id="feishuAppSecret" placeholder="飞书开放平台 App Secret">
-          </div>
-          <div class="setting-group">
-            <label>默认聊天 ID</label>
-            <input type="text" id="feishuChatId" placeholder="oc_xxxxxxxxxxxxxxxxxx">
-            <div class="hint">主动消息发送的目标会话 ID</div>
-          </div>
-          <div class="setting-group">
-            <label>连接状态</label>
-            <div class="feishu-status-row">
-              <span class="feishu-status-dot" id="feishuStatusDot"></span>
-              <span class="feishu-status-text" id="feishuStatusText">检查中…</span>
+          </details>
+
+          <!-- IM 设置 -->
+          <details class="setting-section" id="secIm">
+            <summary class="section-title">
+              <span class="section-icon">📱</span>
+              <span>IM 设置</span>
+              <span class="section-arrow">▾</span>
+            </summary>
+            <div class="section-content">
+              <div class="setting-group">
+                <label>飞书 Bot</label>
+                <div class="toggle-row">
+                  <label class="toggle-label" for="feishuToggle">启用</label>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="feishuToggle">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="hint">通过飞书长连接与 AI 伴侣对话</div>
+              </div>
+              <div class="setting-group">
+                <label>App ID</label>
+                <input type="text" id="feishuAppId" placeholder="飞书开放平台 App ID">
+              </div>
+              <div class="setting-group">
+                <label>App Secret</label>
+                <input type="password" id="feishuAppSecret" placeholder="飞书开放平台 App Secret">
+              </div>
+              <div class="setting-group">
+                <label>默认聊天 ID</label>
+                <input type="text" id="feishuChatId" placeholder="oc_xxxxxxxxxxxxxxxxxx">
+                <div class="hint">主动消息发送的目标会话 ID</div>
+              </div>
+              <div class="setting-group">
+                <label>连接状态</label>
+                <div class="feishu-status-row">
+                  <span class="feishu-status-dot" id="feishuStatusDot"></span>
+                  <span class="feishu-status-text" id="feishuStatusText">检查中…</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="setting-actions">
+          </details>
+
+          <!-- Token 消耗 & 费用预警 -->
+          <details class="setting-section" id="secToken">
+            <summary class="section-title">
+              <span class="section-icon">📊</span>
+              <span>Token 消耗 & 费用预警</span>
+              <span class="section-arrow">▾</span>
+            </summary>
+            <div class="section-content">
+              <div class="setting-group">
+                <label>月度预算（元）</label>
+                <input type="number" id="inputBudget" placeholder="100" step="1" min="0">
+                <div class="hint">设置后超出 80% 将显示警告</div>
+              </div>
+              <div class="setting-divider"></div>
+              <!-- 统计卡片 -->
+              <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                  <div class="stat-value" id="statCalls">—</div>
+                  <div class="stat-label">调用次数</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statTokens">—</div>
+                  <div class="stat-label">总 Token</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statCost">—</div>
+                  <div class="stat-label">总费用（元）</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="statAvg">—</div>
+                  <div class="stat-label">平均 Token/次</div>
+                </div>
+              </div>
+              <div class="budget-bar" id="budgetBar" style="display:none">
+                <div class="budget-track">
+                  <div class="budget-fill" id="budgetFill"></div>
+                </div>
+                <div class="budget-text" id="budgetText"></div>
+              </div>
+              <div class="setting-divider"></div>
+              <!-- 按模型明细 -->
+              <div class="setting-group">
+                <label>按模型明细</label>
+                <div class="model-breakdown" id="modelBreakdown">
+                  <div class="hint">暂无数据</div>
+                </div>
+              </div>
+              <div class="setting-actions">
+                <button class="btn-secondary" onclick="refreshStats()">刷新</button>
+                <button class="btn-secondary btn-danger" onclick="resetStats()">清空统计</button>
+              </div>
+            </div>
+          </details>
+
+          <!-- 全局保存按钮 -->
+          <div class="setting-actions sticky-actions">
             <button class="btn-primary" onclick="saveAllSettings()">保存并重启</button>
             <button class="btn-secondary" onclick="reloadSession()">重建会话</button>
           </div>
+
         </div>
       </div>
 

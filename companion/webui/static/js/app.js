@@ -8,9 +8,7 @@ let messages = [];
 // ── DOM refs ──
 const $ = (s) => document.querySelector(s);
 const chatView = document.getElementById('chatView');
-const settingsPersonaView = document.getElementById('settingsPersonaView');
-const settingsModelView = document.getElementById('settingsModelView');
-const settingsImView = document.getElementById('settingsImView');
+const settingsView = document.getElementById('settingsView');
 const aboutView = document.getElementById('aboutView');
 const msgContainer = document.getElementById('messages');
 const chatInput = document.getElementById('chatInput');
@@ -31,16 +29,13 @@ async function init() {
 function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   chatView.classList.toggle('hidden', view !== 'chat');
-  settingsPersonaView.classList.toggle('active', view === 'settings-persona');
-  settingsModelView.classList.toggle('active', view === 'settings-model');
-  settingsImView.classList.toggle('active', view === 'settings-im');
+  settingsView.classList.toggle('active', view === 'settings');
   aboutView.classList.toggle('active', view === 'about');
 
-  if (view === 'settings-persona' || view === 'settings-model' || view === 'settings-im') {
+  if (view === 'settings') {
     loadSettingsForm();
-  }
-  if (view === 'settings-im') {
     pollFeishuStatus();
+    refreshStats();
     if (window._feishuPollTimer) clearInterval(window._feishuPollTimer);
     window._feishuPollTimer = setInterval(pollFeishuStatus, 10000);
   } else {
@@ -83,6 +78,8 @@ async function saveAllSettings() {
     model: document.getElementById('inputModel').value || 'deepseek-v4-flash',
     api_base: document.getElementById('inputApiBase').value || 'https://api.deepseek.com/v1',
     api_key: document.getElementById('inputApiKey').value || '',
+    cloud_price_in: parseFloat(document.getElementById('inputCloudPriceIn').value) || 1.0,
+    cloud_price_out: parseFloat(document.getElementById('inputCloudPriceOut').value) || 4.0,
     local_model_enabled: document.getElementById('localModelToggle').checked,
     local_model: document.getElementById('inputLocalModel').value || 'qwen3-4b',
     local_api_base: document.getElementById('inputLocalApiBase').value || 'http://127.0.0.1:1234/v1',
@@ -90,6 +87,7 @@ async function saveAllSettings() {
     feishu_app_id: document.getElementById('feishuAppId').value || '',
     feishu_app_secret: document.getElementById('feishuAppSecret').value || '',
     feishu_chat_id: document.getElementById('feishuChatId').value || '',
+    budget: parseFloat(document.getElementById('inputBudget').value) || 0,
   };
 
   try {
@@ -119,6 +117,73 @@ async function reloadSession() {
   } catch (e) {
     showToast('重建失败: ' + e.message);
   }
+}
+
+// ── Token Stats ──
+async function refreshStats() {
+  try {
+    const res = await fetch('/api/token-stats');
+    const stats = await res.json();
+
+    document.getElementById('statCalls').textContent = stats.total_calls.toLocaleString();
+    document.getElementById('statTokens').textContent = formatBigNum(stats.total_tokens);
+    document.getElementById('statCost').textContent = '¥' + stats.total_cost.toFixed(4);
+    document.getElementById('statAvg').textContent = stats.total_calls > 0
+      ? formatBigNum(stats.avg_tokens_per_call)
+      : '—';
+
+    // 预算条
+    const budget = currentConfig.budget || 0;
+    const bar = document.getElementById('budgetBar');
+    const fill = document.getElementById('budgetFill');
+    const text = document.getElementById('budgetText');
+    if (budget > 0 && stats.total_calls > 0) {
+      bar.style.display = '';
+      const pct = Math.min(100, (stats.total_cost / budget) * 100);
+      fill.style.width = pct + '%';
+      fill.className = 'budget-fill' + (pct >= 100 ? ' danger' : pct >= 80 ? ' warn' : '');
+      const remaining = budget - stats.total_cost;
+      text.textContent = remaining >= 0
+        ? `已用 ¥${stats.total_cost.toFixed(2)} / ¥${budget.toFixed(2)}，剩余 ¥${remaining.toFixed(2)}`
+        : `⚠️ 已超出预算 ¥${Math.abs(remaining).toFixed(2)}！`;
+    } else {
+      bar.style.display = 'none';
+    }
+
+    // 按模型明细
+    const container = document.getElementById('modelBreakdown');
+    const models = Object.keys(stats.model_breakdown || {});
+    if (models.length === 0) {
+      container.innerHTML = '<div class="hint">暂无数据</div>';
+    } else {
+      container.innerHTML = models.map(m => {
+        const mb = stats.model_breakdown[m];
+        return `<div class="model-row">
+          <span class="name">${m}</span>
+          <span class="detail">${mb.calls} 次 · ${formatBigNum(mb.total_tokens)} tokens · ¥${mb.cost.toFixed(4)}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch (e) {
+    console.error('Failed to load token stats', e);
+  }
+}
+
+async function resetStats() {
+  if (!confirm('确定要清空所有 Token 统计吗？此操作不可撤销。')) return;
+  try {
+    await fetch('/api/token-reset', { method: 'POST' });
+    showToast('统计已清空');
+    refreshStats();
+  } catch (e) {
+    showToast('清空失败: ' + e.message);
+  }
+}
+
+function formatBigNum(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return String(n);
 }
 
 // ── Character Card Import ──
@@ -259,6 +324,8 @@ async function loadSettingsForm() {
   document.getElementById('inputModel').value = currentConfig.model || '';
   document.getElementById('inputApiBase').value = currentConfig.api_base || '';
   document.getElementById('inputApiKey').value = currentConfig.api_key || '';
+  document.getElementById('inputCloudPriceIn').value = currentConfig.cloud_price_in || 1.0;
+  document.getElementById('inputCloudPriceOut').value = currentConfig.cloud_price_out || 4.0;
 
   // 本地模型设置
   document.getElementById('localModelToggle').checked = currentConfig.local_model_enabled || false;
@@ -271,6 +338,9 @@ async function loadSettingsForm() {
   document.getElementById('feishuAppSecret').value = currentConfig.feishu_app_secret || '';
   document.getElementById('feishuChatId').value = currentConfig.feishu_chat_id || '';
   updateFeishuStatus(currentConfig.feishu_connected || false);
+
+  // 预算
+  document.getElementById('inputBudget').value = currentConfig.budget || '';
 
   // 加载头像预览
   updateAvatarPreview('ai');

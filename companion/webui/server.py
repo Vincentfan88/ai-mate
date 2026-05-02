@@ -32,6 +32,9 @@ _config = {
     "api_key": "",
     "max_steps": 5,
     "workspace": "workspace/companion",
+    # 云端模型费用
+    "cloud_price_in": 1.0,
+    "cloud_price_out": 4.0,
     # 本地模型
     "local_model_enabled": False,
     "local_model": "qwen3-4b",
@@ -41,6 +44,8 @@ _config = {
     "feishu_app_secret": "",
     "feishu_chat_id": "",
     "feishu_enabled": False,
+    # 费用预算
+    "budget": 0,
 }
 
 # 缓存 agent 实例
@@ -450,9 +455,14 @@ async def update_config(body: dict):
     for k in ("mbti", "persona", "model", "api_base", "api_key", "max_steps", "workspace"):
         if k in body:
             _config[k] = body[k]
+    for k in ("cloud_price_in", "cloud_price_out"):
+        if k in body:
+            _config[k] = body[k]
     for k in ("local_model_enabled", "local_model", "local_api_base"):
         if k in body:
             _config[k] = body[k]
+    if "budget" in body:
+        _config["budget"] = body["budget"]
     # 下次请求时自动重建 agent
     global _agent_ref
     _agent_ref = None
@@ -488,6 +498,26 @@ async def feishu_status():
         return {"status": "disabled", "connected": False}
     connected = _feishu_bot.is_connected if _feishu_bot else False
     return {"status": "connected" if connected else "disconnected", "connected": connected}
+
+
+@app.get("/api/token-stats")
+async def token_stats():
+    """获取 Token 消耗统计。"""
+    from companion.token_tracker import token_tracker
+    stats = token_tracker.get_stats()
+    # 将 model_breakdown 中的价格对象简化，避免序列化问题
+    for m, mb in stats.get("model_breakdown", {}).items():
+        if "price" in mb:
+            del mb["price"]
+    return stats
+
+
+@app.post("/api/token-reset")
+async def token_reset():
+    """清空 Token 统计。"""
+    from companion.token_tracker import token_tracker
+    token_tracker.reset()
+    return {"status": "ok"}
 
 
 # WebSocket — 对话
