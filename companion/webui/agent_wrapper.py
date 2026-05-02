@@ -44,11 +44,16 @@ class SilentAgentWrapper:
         # 记录 AI 回复到对话日志
         if self._registry:
             self._registry.memory.add_conversation("assistant", result)
-            # 更新 HMM 状态（接触计数器 + 状态转移）
+            # 更新 HMM 状态（状态转移）
             try:
-                self._registry.record_contact()
                 self._registry.exit_conversation()
             except Exception as e:
                 logging.getLogger("companion").warning(f"HMM update failed: {e}")
+
+            # 活人感记录：从 AI 回复中分析维度数据
+            try:
+                self._registry.liveness.record_response(result)
+            except Exception as e:
+                logging.getLogger("companion").warning(f"Liveness recording failed: {e}")
 
         return result

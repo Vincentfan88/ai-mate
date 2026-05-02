@@ -234,8 +234,8 @@ class CompanionTriggerTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "AI 伴侣的主动联系决策系统。基于 Weibull 分布和 HMM 状态机"
-            "计算是否应该主动联系对方。返回两阶段的拟人化决策："
+            "AI 伴侣的主动联系决策系统。基于连续积温轴（思念量随时间积累，回复后回落）"
+            "和 HMM 状态机计算是否应该主动联系对方。返回两阶段的拟人化决策："
             "想联系的理由（pull）和忍住的理由（hold_back）。"
         )
 
@@ -243,18 +243,13 @@ class CompanionTriggerTool(Tool):
     def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
-            "properties": {
-                "hours_since_last_contact": {
-                    "type": "number",
-                    "description": "距离上次联系的小时数，用于计算触发概率",
-                },
-            },
+            "properties": {},
         }
 
-    async def execute(self, hours_since_last_contact: float = 12) -> ToolResult:
+    async def execute(self) -> ToolResult:
         try:
             r = self._registry
-            decision = r.trigger.compute(hours_since_last_contact=hours_since_last_contact)
+            decision = r.trigger.compute()
             return ToolResult(
                 success=True,
                 content=(

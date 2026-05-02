@@ -65,6 +65,8 @@ class MemorySystem:
             self.fact_store,
             data_path=f"{workspace}/preference.json",
         )
+        # 注入交互缓存，让偏好推断可以读取最近对话
+        self.preference.set_interaction_cache(self.interaction_cache)
 
         # 矛盾检测
         self.contradiction = ContradictionDetector()
@@ -121,6 +123,11 @@ class MemorySystem:
                 return ""
         return str(value) if value else ""
 
+    @property
+    def persona(self) -> Optional[dict]:
+        """获取 L0 人设原始数据"""
+        return self._persona
+
     def get_persona_summary(self) -> str:
         """获取 L0 人设摘要（用于 context 注入）"""
         if self._persona is None:
@@ -149,7 +156,10 @@ class MemorySystem:
     # -------------------- 偏好推断 --------------------
 
     def infer_preferences(self) -> dict:
-        return self.preference.infer(llm_client=getattr(self, '_llm_client', None))
+        """从事实中推断用户偏好，使用已注入的 LLM 客户端"""
+        return self.preference.infer(
+            llm_client=getattr(self, '_llm_client', None)
+        )
 
     def set_llm_client(self, llm_client: Any) -> None:
         """注入 LLM 客户端（由 registry 代理设置）"""

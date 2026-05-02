@@ -107,16 +107,16 @@ class TestAgentEdgeCases:
         import asyncio
 
         tool = CompanionTriggerTool(registry)
-        result = asyncio.run(tool.execute(hours_since_last_contact=0))
+        result = asyncio.run(tool.execute())
         assert result.success
 
     def test_trigger_tool_huge_hours(self, registry):
-        """超大间隔（9999 小时）不应崩溃。"""
+        """多次调用不应崩溃。"""
         from companion.agent.tools import CompanionTriggerTool
         import asyncio
 
         tool = CompanionTriggerTool(registry)
-        result = asyncio.run(tool.execute(hours_since_last_contact=9999))
+        result = asyncio.run(tool.execute())
         assert result.success
 
 
@@ -344,11 +344,9 @@ class TestModuleBoundaryValues:
         _ = rel.check_progress()
         _ = rel.get_scene_multiplier("morning_greeting")
 
-    def test_trigger_zero_and_negative_hours(self, registry):
-        """0 和负数 hours_since_last_contact。"""
-        decision = registry.trigger.compute(hours_since_last_contact=0)
-        assert isinstance(decision, TriggerDecision)
-        decision = registry.trigger.compute(hours_since_last_contact=-5)
+    def test_trigger_computation(self, registry):
+        """正常调用不应崩溃。"""
+        decision = registry.trigger.compute()
         assert isinstance(decision, TriggerDecision)
 
     def test_liveness_zero_interactions(self, temp_workspace):

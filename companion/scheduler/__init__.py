@@ -72,6 +72,34 @@ class ProactiveLoop:
 
     async def _check_trigger(self):
         """检查是否应该触发主动联系"""
+        # 检查纪念日（高优先级）
+        anniversary_hits = []
+        try:
+            anniversary_hits = self.registry.anniversary.check_today()
+        except Exception:
+            pass
+
+        if anniversary_hits:
+            event = {
+                "type": "anniversary_trigger",
+                "anniversaries": anniversary_hits,
+                "timestamp": datetime.now().isoformat(),
+            }
+            if asyncio.iscoroutinefunction(self.on_trigger):
+                await self.on_trigger(event)
+            else:
+                self.on_trigger(event)
+            return
+
+        # 检查习惯（今日 emoji/口头禅）
+        daily_emoji = None
+        catchphrase = None
+        try:
+            daily_emoji = self.registry.habits.get_daily_emoji()
+            catchphrase = self.registry.habits.get_catchphrase()
+        except Exception:
+            pass
+
         decision = self.registry.trigger.compute()
         if decision.should_trigger and self.on_trigger:
             event = {
@@ -81,6 +109,8 @@ class ProactiveLoop:
                     "hold_back": decision.hold_back,
                     "nudge": decision.nudge,
                     "state": decision.state,
+                    "daily_emoji": daily_emoji,
+                    "catchphrase": catchphrase,
                 },
                 "timestamp": datetime.now().isoformat(),
             }

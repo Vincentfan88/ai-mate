@@ -54,8 +54,13 @@ def _convert_v1_format(raw: dict) -> dict:
     }
 
 
-def build_system_prompt(persona: dict) -> str:
-    """从人格配置动态生成系统提示词。"""
+def build_system_prompt(persona: dict, user_name: str = "") -> str:
+    """从人格配置动态生成系统提示词。
+
+    Args:
+        persona: 人格配置 dict
+        user_name: 用户的名字，可选。如果提供，会在提示词中加入称呼。
+    """
     name = persona.get("name", "未知")
     description = persona.get("description", "")
 
@@ -81,10 +86,21 @@ def build_system_prompt(persona: dict) -> str:
         "",
         "---",
         "",
+    ]
+
+    if user_name:
+        sections.extend([
+            "## 用户信息",
+            "",
+            f"对方叫 **{user_name}**，请用这个名字称呼他/她。",
+            "",
+        ])
+
+    sections.extend([
         "## 人格画像",
         "",
         "### 核心特质",
-    ]
+    ])
 
     for t in traits:
         sections.append(f"- {t}")
@@ -170,6 +186,18 @@ def build_system_prompt(persona: dict) -> str:
         "5. **不知道说什么时**, 调用 companion_trending 找话题",
         "6. **先查状态再回复**, 不要凭空猜测自己的情绪",
         "7. 保持自然节奏，不要一次把所有工具都调一遍",
+        "",
+        "## 记忆提取规则",
+        "",
+        "当对方提到以下任何内容时，**必须**调用 companion_memory(record) 记录下来：",
+        "- 个人喜好（食物、音乐、电影、活动等）",
+        "- 重要事件（生日、纪念日、考试、面试、旅行计划）",
+        "- 情绪状态（开心、难过、压力大、疲倦等）",
+        "- 生活习惯（作息时间、工作习惯、兴趣爱好）",
+        "- 对你的态度或关系的表达（想念、喜欢、担心等）",
+        "- 过去的经历或重要决定",
+        "",
+        "记录格式：用完整的句子描述事实，例如 '用户喜欢吃辣，尤其是火锅'",
     ])
 
     if greeting:

@@ -21,10 +21,19 @@ class CompanionRegistry:
         workspace: str = "workspace/companion",
         config_dir: str = "companion/config",
         mbti_type: str = "ENFP",
+        persona_name: str = "default",
+        persona_path: Optional[str] = None,
+        trigger_quiet_hours: tuple = None,
     ):
-        self.workspace = workspace
+        self._base_workspace = workspace
+        self.workspace = f"{workspace}/{persona_name}"
         self.config_dir = config_dir
         self.mbti_type = mbti_type
+        self._persona_name = persona_name
+        self._persona_path = persona_path
+        self._trigger_overrides = {
+            "quiet_hours": trigger_quiet_hours,
+        }
 
         # Lazy-initialized modules
         self._modules: Dict[str, object] = {}
@@ -44,11 +53,15 @@ class CompanionRegistry:
     def memory(self) -> MemorySystem:
         mem = self._get_or_create("memory", lambda: MemorySystem(
             workspace=self.workspace,
-            persona_path=f"{self.config_dir}/../skills/companion/default.json",
+            persona_path=self._persona_path,
         ))
         # 如果已有 LLM 客户端，注入到 memory 系统
         if self._llm_client:
             mem.set_llm_client(self._llm_client)
+        # 将 persona 名字注入到对话日志
+        persona = mem.persona
+        ai_name = persona.get("name", "AI") if persona else "AI"
+        mem.conversation_log.ai_name = ai_name
         return mem
 
     @property
@@ -74,6 +87,7 @@ class CompanionRegistry:
         return self._get_or_create("trigger", lambda: TriggerEngine(
             config_path=f"{self.config_dir}/triggers.json",
             state_path=f"{self.workspace}/states/trigger_state.json",
+            quiet_hours=self._trigger_overrides.get("quiet_hours"),
         ))
 
     @property
@@ -126,16 +140,18 @@ class CompanionRegistry:
     def get_module(self, name: str) -> Optional[object]:
         return self._modules.get(name)
 
+    # ── Shared resource paths (not per-persona) ─────────────
+
+    @property
+    def avatar_dir(self) -> str:
+        return f"{self._base_workspace}/avatars"
+
     # ── HMM / HardFilter 便捷通知 ───────────────────────────────
 
     def on_user_message(self, now: Optional[datetime] = None) -> None:
-        """通知 HMM 用户发来消息（切换到 ACTIVE 状态）。"""
-        self.trigger.hmm.on_user_message(now)
+        """通知 HMM 用户发来消息（切换到 ACTIVE 状态），更新 pride + 降低 connection。"""
+        self.trigger.on_user_message(now)
 
     def exit_conversation(self) -> str:
         """通知 HMM 对话结束（概率转移），返回新的状态名。"""
         return self.trigger.hmm.exit_conversation()
-
-    def record_contact(self, timestamp: Optional[datetime] = None) -> None:
-        """记录一次主动联系（更新 HardFilter 接触计数器）。"""
-        self.trigger.hard_filter.record_contact(timestamp)

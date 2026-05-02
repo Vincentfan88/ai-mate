@@ -8,9 +8,13 @@ from pathlib import Path
 import pytest
 
 from companion.modules.registry import CompanionRegistry
-from companion.tools import (
-    StateTool, MemoryTool, EmotionTool,
-    TriggerTool, MBTITool, SceneTool,
+from companion.agent.tools import (
+    CompanionStateTool as StateTool,
+    CompanionMemoryTool as MemoryTool,
+    CompanionEmotionTool as EmotionTool,
+    CompanionTriggerTool as TriggerTool,
+    CompanionMBTITool as MBTITool,
+    CompanionSceneTool as SceneTool,
 )
 from companion.scheduler import MessageRouter, ProactiveLoop, WebhookListener
 
@@ -54,8 +58,8 @@ class TestEndToEnd:
             triggered.append(msg)
 
         loop = ProactiveLoop(registry, on_trigger=on_trigger, check_interval=1)
-        # Compute trigger with long gap
-        decision = registry.trigger.compute(hours_since_last_contact=48)
+        # Compute trigger
+        decision = registry.trigger.compute()
 
         # The decision should have anthropomorphic fields
         assert decision.pull is not None
@@ -98,15 +102,15 @@ class TestEndToEnd:
             (StateTool(registry), {}),
             (MemoryTool(registry), {"action": "search", "query": ""}),
             (EmotionTool(registry), {"event_type": "time_passage"}),
-            (TriggerTool(registry), {"hours_since_last_contact": 12}),
-            (MBTITool(registry), {"type": "ENFP"}),
+            (TriggerTool(registry), {}),
+            (MBTITool(registry), {"mbti_type": "ENFP"}),
             (SceneTool(registry), {"hour": 14, "mood": "idle"}),
         ]
         for tool, args in tools:
-            result = tool.run(args)
+            result = asyncio.run(tool.execute(**args))
             assert result is not None
-            assert isinstance(result, str)
-            assert len(result) > 0
+            assert isinstance(result.content, str)
+            assert len(result.content) > 0
 
     @pytest.mark.asyncio
     async def test_message_router(self):
@@ -304,5 +308,75 @@ class TestEndToEnd:
         assert emotion["emotion"] is not None
 
         # Trigger should be computable
-        decision = registry.trigger.compute(hours_since_last_contact=24)
+        decision = registry.trigger.compute()
         assert decision.pull is not None or decision.hold_back is not None
+
+
+class TestPersonaIsolation:
+    """Verify workspace is isolated per persona."""
+
+    def test_different_personas_get_separate_workspaces(self):
+        """Different persona_name values should use separate workspace directories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = f"{tmpdir}/workspace/companion"
+            Path(workspace).mkdir(parents=True)
+
+            reg_a = CompanionRegistry(
+                workspace=workspace,
+                config_dir="companion/config",
+                mbti_type="ENFP",
+                persona_name="persona_a",
+            )
+            reg_b = CompanionRegistry(
+                workspace=workspace,
+                config_dir="companion/config",
+                mbti_type="ENFP",
+                persona_name="persona_b",
+            )
+
+            assert reg_a.workspace.endswith("persona_a")
+            assert reg_b.workspace.endswith("persona_b")
+            assert reg_a.workspace != reg_b.workspace
+
+    def test_persona_data_is_isolated(self):
+        """Writing data for one persona should not appear in another."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = f"{tmpdir}/workspace/companion"
+            Path(workspace).mkdir(parents=True)
+
+            reg_a = CompanionRegistry(
+                workspace=workspace,
+                config_dir="companion/config",
+                mbti_type="ENFP",
+                persona_name="persona_a",
+            )
+            reg_b = CompanionRegistry(
+                workspace=workspace,
+                config_dir="companion/config",
+                mbti_type="ENFP",
+                persona_name="persona_b",
+            )
+
+            # Record memory for persona A
+            reg_a.memory.record("只属于 A 的记忆", importance=0.8)
+
+            # Persona B should not see it
+            results_b = reg_b.memory.search("只属于")
+            assert len(results_b) == 0
+
+    def test_default_persona_name(self):
+        """Default persona_name should be 'default'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = f"{tmpdir}/workspace/companion"
+            Path(workspace).mkdir(parents=True)
+            reg = CompanionRegistry(workspace=workspace)
+            assert reg.workspace.endswith("default")
+
+    def test_avatar_dir_is_shared(self):
+        """avatar_dir should point to the base workspace, not per-persona."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = f"{tmpdir}/workspace/companion"
+            Path(workspace).mkdir(parents=True)
+            reg = CompanionRegistry(workspace=workspace, persona_name="custom")
+            assert "custom" not in reg.avatar_dir
+            assert reg.avatar_dir == f"{workspace}/avatars"

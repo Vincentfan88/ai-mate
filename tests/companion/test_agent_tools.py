@@ -92,13 +92,12 @@ class TestCompanionAgentTools:
     def test_trigger_tool_metadata(self, registry):
         tool = CompanionTriggerTool(registry)
         assert tool.name == "companion_trigger"
-        assert "hours_since_last_contact" in tool.parameters["properties"]
 
     def test_trigger_tool_execute(self, registry):
         tool = CompanionTriggerTool(registry)
 
         import asyncio
-        result = asyncio.run(tool.execute(hours_since_last_contact=8))
+        result = asyncio.run(tool.execute())
         assert result.success
         assert "是否联系" in result.content
 

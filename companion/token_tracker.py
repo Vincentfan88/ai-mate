@@ -52,18 +52,21 @@ class TokenEntry:
         total_tokens: int,
         model: str,
         timestamp: str,
+        cached_tokens: int = 0,
     ):
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
         self.total_tokens = total_tokens
         self.model = model
         self.timestamp = timestamp
+        self.cached_tokens = cached_tokens
 
     def to_dict(self) -> dict:
         return {
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
+            "cached_tokens": self.cached_tokens,
             "model": self.model,
             "timestamp": self.timestamp,
         }
@@ -72,11 +75,26 @@ class TokenEntry:
 class TokenTracker:
     """Token 消耗追踪器。"""
 
+    MAX_ENTRIES = 10000
+
     def __init__(self, workspace: str = "workspace/companion"):
         self.workspace = Path(workspace)
         self.stats_file = self.workspace / "token_stats.json"
         self._entries: List[TokenEntry] = []
+        self._price_overrides: Dict[str, dict] = {}  # model -> {input, output, cache_input}
         self._load_stats()
+
+    def set_price(self, model: str, price_in: float, price_out: float, price_cache_in: Optional[float] = None) -> None:
+        """设置模型价格覆盖（由 WebUI config 注入）"""
+        self._price_overrides[model] = {
+            "input": price_in,
+            "output": price_out,
+            "cache_input": price_cache_in if price_cache_in is not None else price_in * 0.1,
+        }
+
+    def clear_price_overrides(self) -> None:
+        """清空价格覆盖"""
+        self._price_overrides.clear()
 
     def _load_stats(self) -> None:
         """加载历史统计。"""
@@ -105,6 +123,8 @@ class TokenTracker:
         completion_tokens: int,
         model: str,
         timestamp: Optional[str] = None,
+        cached_tokens: int = 0,
+        price_cache_in: float = None,
     ) -> TokenEntry:
         """记录一次 LLM 调用的 token 消耗。
 
@@ -113,6 +133,8 @@ class TokenTracker:
             completion_tokens: 输出 token 数
             model: 模型名称
             timestamp: 时间戳，默认当前时间
+            cached_tokens: 缓存命中的输入 token 数
+            price_cache_in: 缓存输入价格（元/百万 token），不传则用默认价格表
         """
         entry = TokenEntry(
             prompt_tokens=prompt_tokens,
@@ -120,11 +142,18 @@ class TokenTracker:
             total_tokens=prompt_tokens + completion_tokens,
             model=model,
             timestamp=timestamp or datetime.now().isoformat(),
+            cached_tokens=cached_tokens,
         )
         self._entries.append(entry)
+        # 防止无限增长：超过上限时删除最旧的条目
+        if len(self._entries) > self.MAX_ENTRIES:
+            self._entries = self._entries[-self.MAX_ENTRIES:]
+            logger.warning(f"[TokenTracker] 已裁剪 {self.MAX_ENTRIES} 条之前的旧记录")
         self._save_stats()
 
         price = self._get_model_price(model)
+        if price_cache_in is not None:
+            price = {**price, "cache_input": price_cache_in}
         cost = self._calculate_entry_cost(entry, price)
         logger.info(
             f"Token: {entry.total_tokens} tokens "
@@ -154,6 +183,7 @@ class TokenTracker:
                 "total_tokens": 0,
                 "total_cost": 0.0,
                 "avg_tokens_per_call": 0,
+                "cache_hit_rate": None,
                 "model_breakdown": {},
             }
 
@@ -163,21 +193,26 @@ class TokenTracker:
 
         # 按模型分组统计
         model_breakdown: Dict[str, dict] = {}
+        total_cached = 0
         for e in entries:
             if e.model not in model_breakdown:
                 price = self._get_model_price(e.model)
                 model_breakdown[e.model] = {
                     "calls": 0,
                     "total_tokens": 0,
+                    "cached_tokens": 0,
                     "price": price,
                     "cost": 0.0,
                 }
             mb = model_breakdown[e.model]
             mb["calls"] += 1
             mb["total_tokens"] += e.total_tokens
+            mb["cached_tokens"] += e.cached_tokens
             mb["cost"] += self._calculate_entry_cost(e, mb["price"])
+            total_cached += e.cached_tokens
 
         total_cost = sum(mb["cost"] for mb in model_breakdown.values())
+        cache_hit_rate = total_cached / total_prompt if total_prompt > 0 else 0.0
 
         return {
             "total_calls": len(entries),
@@ -186,6 +221,7 @@ class TokenTracker:
             "total_tokens": total_tokens,
             "total_cost": total_cost,
             "avg_tokens_per_call": total_tokens // len(entries),
+            "cache_hit_rate": cache_hit_rate,
             "model_breakdown": model_breakdown,
         }
 
@@ -216,7 +252,9 @@ class TokenTracker:
         logger.info("[TokenTracker] 统计已重置")
 
     def _get_model_price(self, model: str) -> dict:
-        """获取模型价格。"""
+        """获取模型价格（优先使用覆盖价格）。"""
+        if model in self._price_overrides:
+            return self._price_overrides[model]
         for key, price in MODEL_PRICES.items():
             if key in model.lower():
                 return price
@@ -224,9 +262,13 @@ class TokenTracker:
 
     def _calculate_entry_cost(self, entry: TokenEntry, price: dict) -> float:
         """计算单次调用费用（元）。"""
-        input_cost = (entry.prompt_tokens / 1_000_000) * price["input"]
+        cached = entry.cached_tokens
+        prompt_cached = max(0, entry.prompt_tokens - cached)
+        price_cache_in = price.get("cache_input", price.get("input") * 0.1)
+        input_cost = (prompt_cached / 1_000_000) * price["input"]
+        cache_cost = (cached / 1_000_000) * price_cache_in
         output_cost = (entry.completion_tokens / 1_000_000) * price["output"]
-        return input_cost + output_cost
+        return input_cost + cache_cost + output_cost
 
 
 # 全局单例

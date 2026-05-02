@@ -1,9 +1,13 @@
 """HMM 隐马尔可夫状态机 — 完整转移概率矩阵 + 外部因子驱动。"""
 
 import json
+import logging
 import random
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+logger = logging.getLogger("companion")
 
 
 class CompanionState:
@@ -127,10 +131,11 @@ class HMMStateMachine:
         self.state_entered_at: Optional[datetime] = None
         self.transition_count = 0
         self.last_user_message: Optional[datetime] = None
+        self._last_state_time: Dict[str, datetime] = {}  # state -> last entered time
+        self._cooldown_until: Dict[str, datetime] = {}   # state -> cooldown expiry
 
         # Ensure parent directory exists before any state operations
         if self.state_path:
-            from pathlib import Path
             Path(self.state_path).parent.mkdir(parents=True, exist_ok=True)
 
         self._record_change(CompanionState.IDLE)
@@ -145,7 +150,19 @@ class HMMStateMachine:
                 self.last_user_message = None
                 if data.get("last_user_message"):
                     self.last_user_message = datetime.fromisoformat(data["last_user_message"])
-            except Exception:
+                # Restore cooldown tracking
+                for state_name, ts in data.get("last_state_times", {}).items():
+                    try:
+                        self._last_state_time[state_name] = datetime.fromisoformat(ts)
+                    except ValueError:
+                        pass
+                for state_name, ts in data.get("cooldown_until", {}).items():
+                    try:
+                        self._cooldown_until[state_name] = datetime.fromisoformat(ts)
+                    except ValueError:
+                        pass
+            except Exception as e:
+                logger.warning(f"[HMM] 状态文件加载失败: {e}，使用默认状态")
                 pass
 
     def _save_state(self):
@@ -155,13 +172,16 @@ class HMMStateMachine:
                 "state": self.current_state,
                 "last_user_message": self.last_user_message.isoformat() if self.last_user_message else None,
                 "transition_count": self.transition_count,
+                "last_state_times": {k: v.isoformat() for k, v in self._last_state_time.items()},
+                "cooldown_until": {k: v.isoformat() for k, v in self._cooldown_until.items()},
             }
-            with open(self.state_path, "w") as f:
+            with open(self.state_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
 
     def _record_change(self, new_state: str):
         self.current_state = new_state
         self.state_entered_at = datetime.now()
+        self._last_state_time[new_state] = datetime.now()
         self.state_history.record(new_state)
         self.transition_count += 1
         self._save_state()
@@ -214,8 +234,26 @@ class HMMStateMachine:
 
         should, target = self.should_transition(hours, now.hour)
         if should:
+            # Check cooldown on target state
+            if self._is_in_cooldown(target):
+                return self.current_state
             self._record_change(target)
+            self._apply_cooldown(target)
         return self.current_state
+
+    def _is_in_cooldown(self, target_state: str) -> bool:
+        """检查目标状态是否在冷却期内"""
+        if target_state in self._cooldown_until:
+            if datetime.now() < self._cooldown_until[target_state]:
+                return True
+        return False
+
+    def _apply_cooldown(self, state: str) -> None:
+        """对某个状态应用冷却时间"""
+        from datetime import timedelta
+        cooldown_hours = self.config.get(state, {}).get("cooldown_hours", 0)
+        if cooldown_hours > 0:
+            self._cooldown_until[state] = datetime.now() + timedelta(hours=cooldown_hours)
 
     def on_user_message(self, now: datetime = None):
         """用户发消息时切换到 active"""

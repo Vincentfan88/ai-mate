@@ -25,11 +25,6 @@ class LivenessTracker:
         "脆弱性", "身体存在感", "不可预测性", "依恋度"
     ]
 
-    DIMENSION_KEYS_EN = [
-        "initiative", "consistency", "growth", "emotional",
-        "vulnerability", "physical_presence", "unpredictability", "attachment"
-    ]
-
     # 不可预测性：随机昵称
     NICKNAMES = [
         "笨蛋", "傻瓜", "亲爱的", "宝贝",
@@ -106,7 +101,7 @@ class LivenessTracker:
         """记录一次回复，分析各维度（含不可预测性检测）"""
         self.current_session["total_messages"] += 1
         self.current_session["total_contacts"] += 1
-        text = content.lower()
+        text = content
 
         # 情绪表达
         emotions = self._detect_emotions(text)

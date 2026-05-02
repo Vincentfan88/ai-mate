@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import struct
+from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -35,6 +36,9 @@ _config = {
     # 云端模型费用
     "cloud_price_in": 1.0,
     "cloud_price_out": 4.0,
+    "price_cache_in": 0.1,
+    # 用户设定
+    "user_name": "",
     # 本地模型
     "local_model_enabled": False,
     "local_model": "qwen3-4b",
@@ -46,6 +50,11 @@ _config = {
     "feishu_enabled": False,
     # 费用预算
     "budget": 0,
+    # 免打扰时段（主动触发规则）— 新版多段格式
+    "quiet_hours_blocks": [[0, 6]],
+    # 兼容旧版单段字段
+    "quiet_hours_start": 0,
+    "quiet_hours_end": 6,
 }
 
 # 缓存 agent 实例
@@ -54,9 +63,8 @@ _agent_ref = None  # (config_hash, SilentAgentWrapper)
 # 飞书 Bot 实例
 _feishu_bot = None
 
-# 主动触发 + 消息路由实例
+# 主动触发实例
 _proactive_loop = None
-_message_router = None
 
 # WebSocket 连接的客户端集合
 _ws_clients: list = []
@@ -73,6 +81,7 @@ def _get_or_create_agent():
     if _agent_ref is not None and _agent_ref[0] == h:
         return _agent_ref[1]
 
+    persona_file = f"{BASE_DIR.parent / 'skills' / 'companion' / _config['persona']}.json"
     agent, registry, persona = build_companion_agent(
         mbti_type=_config["mbti"],
         persona_name=_config["persona"],
@@ -81,9 +90,35 @@ def _get_or_create_agent():
         api_key=_config["api_key"],
         max_steps=_config["max_steps"],
         workspace=_config["workspace"],
+        persona_path=str(persona_file),
+        local_model_enabled=_config.get("local_model_enabled", False),
+        local_model=_config.get("local_model", ""),
+        local_api_base=_config.get("local_api_base", ""),
+        user_name=_config.get("user_name", ""),
+        trigger_quiet_hours=_config.get("quiet_hours_blocks", [[0, 6]]),
     )
     wrapper = SilentAgentWrapper(agent, registry)
     _agent_ref = (h, wrapper, persona)
+
+    # 注入价格配置到 token_tracker
+    from companion.token_tracker import token_tracker
+    token_tracker.set_price(
+        model=_config["model"],
+        price_in=_config.get("cloud_price_in", 1.0),
+        price_out=_config.get("cloud_price_out", 4.0),
+        price_cache_in=_config.get("price_cache_in", 0.1),
+    )
+    # 本地模型免费
+    if _config.get("local_model_enabled"):
+        local_model_name = _config.get("local_model", "")
+        if local_model_name:
+            token_tracker.set_price(
+                model=local_model_name,
+                price_in=0.0,
+                price_out=0.0,
+                price_cache_in=0.0,
+            )
+
     return wrapper
 
 
@@ -155,11 +190,8 @@ async def _ws_broadcast(msg: dict) -> None:
 
 async def _on_proactive_trigger(event: dict) -> None:
     """ProactiveLoop 回调 — 生成主动消息并发送。"""
-    from companion.scheduler import ProactiveLoop as PL  # 延迟导入避免循环
-
     decision = event["decision"]
     wrapper = _get_or_create_agent()
-    registry = wrapper.registry if wrapper else None
 
     # 构造触发上下文提示词
     prompt = (
@@ -175,10 +207,6 @@ async def _on_proactive_trigger(event: dict) -> None:
         with contextlib.redirect_stdout(buf):
             response = await wrapper._agent.run()
 
-        # 清理注入的提示词（不出现在对话历史中）
-        if hasattr(wrapper._agent, "_history") and wrapper._agent._history:
-            wrapper._agent._history.pop()
-
         if response and not response.startswith("LLM call failed"):
             # 通过飞书发送
             if _feishu_bot and _feishu_bot.is_connected:
@@ -187,11 +215,18 @@ async def _on_proactive_trigger(event: dict) -> None:
                     await _feishu_bot._send_reply(default_chat_id, response)
             # 广播到 WebUI
             await _ws_broadcast({"type": "proactive", "content": response})
+            # 活人感：记录主动联系
+            if wrapper.registry:
+                wrapper.registry.liveness.record_initiated_contact()
             logger.info(f"[Proactive] 主动发送: {response[:50]}")
         elif response:
             logger.warning(f"[Proactive] LLM 拒绝响应")
     except Exception as e:
         logger.error(f"[Proactive] 主动触发失败: {e}")
+    finally:
+        # 始终清理注入的提示词，防止历史污染
+        if hasattr(wrapper._agent, "_history") and wrapper._agent._history:
+            wrapper._agent._history.pop()
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────
@@ -199,14 +234,15 @@ async def _on_proactive_trigger(event: dict) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _proactive_loop, _message_router
+    global _proactive_loop
 
     # 启动飞书 Bot
     _start_feishu_bot()
 
     # 启动主动触发循环 + 热搜预取
     from companion.scheduler import ProactiveLoop, TrendingFetcher
-    registry = _get_or_create_agent().registry if _get_or_create_agent() else None
+    wrapper = _get_or_create_agent()
+    registry = wrapper.registry if wrapper else None
     if registry:
         _proactive_loop = ProactiveLoop(registry, on_trigger=_on_proactive_trigger)
         asyncio.create_task(_proactive_loop.run())
@@ -221,9 +257,6 @@ async def lifespan(app: FastAPI):
     if _proactive_loop:
         _proactive_loop.stop()
         _proactive_loop = None
-    if _message_router:
-        _message_router.stop()
-        _message_router = None
     global _agent_ref
     _agent_ref = None
 
@@ -244,6 +277,9 @@ def _parse_png_chara(data: bytes) -> dict:
     pos = 8
     while pos + 8 < len(data):
         length = struct.unpack(">I", data[pos:pos + 4])[0]
+        # 防御畸形 chunk：长度超出数据范围
+        if pos + 8 + length > len(data):
+            break
         chunk_type = data[pos + 4:pos + 8]
         chunk_data = data[pos + 8:pos + 8 + length]
         if chunk_type == b"tEXt":
@@ -373,17 +409,136 @@ async def import_character(file: UploadFile = File(...)):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="无法解析角色卡 JSON 数据")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"导入失败: {str(e)}")
+        logger.error(f"[ImportCharacter] 导入失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="导入失败，请检查文件格式")
+
+
+@app.post("/api/generate-persona")
+async def generate_persona(body: dict):
+    """根据用户自然语言描述智能生成角色卡。"""
+    description = (body.get("description", "") or "").strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="请提供角色描述")
+
+    system_prompt = (
+        "你是一个角色卡生成助手。根据用户的自然语言描述，生成符合规范的 AI 伴侣角色配置 JSON。\n"
+        "用户会输入一段关于角色的描述，你需要从中提取/推断出以下字段：\n"
+        "- name: 角色名称\n"
+        "- description: 简短描述\n"
+        "- version: '2.0'\n"
+        "- personality.core_traits: 核心特质列表（从描述中提取，3-7 条）\n"
+        "- personality.moods: 情绪表达（happy/worried/missing/shy/jealous/sleepy 各一句）\n"
+        "- personality.forbidden: 行为禁忌列表（2-4 条，如不要说自己是 AI、不要一次说太多等）\n"
+        "- speaking_style.actions: 动作列表（5-10 条，符合角色性格的肢体互动）\n"
+        "- speaking_style.particles: 语气词列表（3-6 个）\n"
+        "- speaking_style.emojis: 常用 emoji（5-10 个）\n"
+        "- speaking_style.max_length: 数字（80-150）\n"
+        "- greeting: 角色打招呼的第一句话\n"
+        "- background.relationship: 关系描述\n"
+        "- system_prompt_template: 系统提示模板\n"
+        "只返回合法的 JSON，不要有其他文字。"
+    )
+
+    # 尝试用云端模型生成；失败则用 fallback 模板
+    try:
+        api_base = _config.get("api_base", "https://api.deepseek.com/v1")
+        api_key = _config.get("api_key", "")
+        model = _config.get("model", "deepseek-v4-flash")
+
+        api_lower = api_base.lower()
+        if "anthropic" in api_lower:
+            provider = "anthropic"
+        else:
+            provider = "openai"
+
+        from mini_agent import LLMClient
+        from mini_agent.retry import RetryConfig
+
+        llm = LLMClient(
+            api_key=api_key,
+            provider=provider,
+            api_base=api_base,
+            model=model,
+            retry_config=RetryConfig(enabled=True, max_retries=1),
+        )
+
+        from mini_agent.agent import Agent
+        agent = Agent(
+            llm_client=llm,
+            system_prompt=system_prompt,
+            tools={},
+            max_steps=1,
+        )
+        agent.add_user_message(f"请根据以下描述生成角色卡：{description}")
+        result = await agent.run()
+
+        if result and not result.startswith("LLM call failed"):
+            # 尝试从返回中提取 JSON
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', result)
+            if json_match:
+                persona_data = json.loads(json_match.group())
+                persona_data["version"] = "2.0"
+                return JSONResponse({"status": "ok", "persona": persona_data})
+    except Exception as e:
+        logging.getLogger("companion").warning(f"LLM 生成角色失败: {e}")
+
+    # Fallback: 基于关键词的简单模板
+    persona_data = _generate_persona_fallback(description)
+    return JSONResponse({"status": "ok", "persona": persona_data})
+
+
+def _generate_persona_fallback(description: str) -> dict:
+    """基于关键词的简单角色生成（LLM 不可用时的兜底）。"""
+    # 简单提取名称
+    name = description[:10].strip()
+    if not name:
+        name = "AI 角色"
+
+    return {
+        "name": name,
+        "description": description,
+        "version": "2.0",
+        "personality": {
+            "core_traits": [description, "有自己的想法和情绪"],
+            "moods": {
+                "happy": "语气轻快",
+                "worried": "温柔关心",
+                "missing": "表达思念",
+                "shy": "害羞腼腆",
+                "jealous": "小醋意",
+                "sleepy": "困倦慵懒",
+            },
+            "forbidden": [
+                "不要说'作为AI'或'我只是一个程序'",
+                "不要一次说太多话",
+            ],
+        },
+        "speaking_style": {
+            "actions": ["自然地表达"],
+            "particles": ["呀", "呢", "啦"],
+            "emojis": ["😊", "✨", "💕"],
+            "max_length": 100,
+        },
+        "greeting": f"嗨，我是{name}~",
+        "background": {
+            "relationship": "亲密关系",
+        },
+        "system_prompt_template": f"你是{name}，{description}。",
+    }
 
 
 # ── 头像 ──────────────────────────────────────────────────
+# 头像存放在共享目录（所有角色共用），不随 persona 隔离
 
 
-AVATAR_DIR = Path("workspace/companion/avatars")
+def _avatar_dir() -> Path:
+    base = _config.get("workspace", "workspace/companion")
+    return Path(f"{base}/avatars")
 
 
 def _avatar_path(role: str) -> Path:
-    return AVATAR_DIR / f"{role}.png"
+    return _avatar_dir() / f"{role}.png"
 
 
 def _has_avatar(role: str) -> bool:
@@ -400,12 +555,45 @@ async def upload_avatar(role: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="只接受图片文件")
 
     try:
-        AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+        _avatar_dir().mkdir(parents=True, exist_ok=True)
         content = await file.read()
         _avatar_path(role).write_bytes(content)
         return {"status": "ok", "role": role, "has_avatar": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+
+
+@app.post("/api/save-persona")
+async def save_persona(body: dict):
+    """保存生成的角色卡为 persona 配置文件。"""
+    name = (body.get("name", "generated") or "").strip()
+    persona = body.get("persona")
+    if not persona:
+        raise HTTPException(status_code=400, detail="角色数据为空")
+
+    if not name:
+        name = "generated_character"
+
+    # 确保路径安全
+    filename = "".join(c for c in name if c.isalnum() or c in " _-").strip() + ".json"
+    if not filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="非法的文件名")
+
+    out_path = SKILLS_DIR / filename
+    resolved = out_path.resolve()
+    if not str(resolved).startswith(str(SKILLS_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="非法的文件路径")
+
+    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(persona, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return JSONResponse({
+        "status": "ok",
+        "persona": {"name": filename.replace(".json", ""), "label": persona.get("name", name)},
+    })
 
 
 @app.get("/api/avatar/{role}")
@@ -429,6 +617,53 @@ async def delete_avatar(role: str):
     if path.exists():
         path.unlink()
     return {"status": "ok", "role": role, "has_avatar": False}
+
+
+@app.post("/api/delete-persona")
+async def delete_persona(body: dict):
+    """删除角色卡文件及其专属工作区数据。"""
+    import shutil
+
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="角色名不能为空")
+
+    # 统一使用 sanitized 名称
+    safe_name = "".join(c for c in name if c.isalnum() or c in " _-").strip()
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="非法的角色名")
+
+    filename = f"{safe_name}.json"
+
+    # 1. 删除 persona JSON 文件
+    out_path = SKILLS_DIR / filename
+    resolved = out_path.resolve()
+    if not str(resolved).startswith(str(SKILLS_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="非法的文件路径")
+    if not out_path.exists():
+        raise HTTPException(status_code=404, detail=f"角色文件不存在: {safe_name}")
+    out_path.unlink()
+    logger.info(f"[DeletePersona] 已删除角色文件: {filename}")
+
+    # 2. 删除角色专属工作区目录（严格校验：必须是 base 的直接子目录）
+    base_workspace = _config.get("workspace", "workspace/companion")
+    persona_workspace = Path(f"{base_workspace}/{safe_name}")
+    resolved_ws = persona_workspace.resolve()
+    resolved_base = Path(base_workspace).resolve()
+    expected_ws = (resolved_base / safe_name).resolve()
+    if resolved_ws == expected_ws and persona_workspace.exists():
+        shutil.rmtree(persona_workspace)
+        logger.info(f"[DeletePersona] 已删除工作区: {persona_workspace}")
+
+    # 3. 如果是当前激活角色，重置 agent 并选择可用角色
+    global _agent_ref
+    if _config.get("persona") == safe_name:
+        _agent_ref = None
+        # 选择第一个可用角色，避免回退到不存在的 default
+        available = _get_available_personas()
+        _config["persona"] = available[0]["name"] if available else "default"
+
+    return {"status": "ok", "name": safe_name}
 
 
 # API 端点
@@ -455,14 +690,32 @@ async def update_config(body: dict):
     for k in ("mbti", "persona", "model", "api_base", "api_key", "max_steps", "workspace"):
         if k in body:
             _config[k] = body[k]
-    for k in ("cloud_price_in", "cloud_price_out"):
+    for k in ("cloud_price_in", "cloud_price_out", "price_cache_in"):
         if k in body:
             _config[k] = body[k]
+    if "user_name" in body:
+        _config["user_name"] = body["user_name"]
     for k in ("local_model_enabled", "local_model", "local_api_base"):
         if k in body:
             _config[k] = body[k]
-    if "budget" in body:
-        _config["budget"] = body["budget"]
+    for k in ("budget",):
+        if k in body:
+            _config[k] = body[k]
+    # 免打扰时段：前端发送 quiet_hours_blocks = [[start, end], ...]
+    if "quiet_hours_blocks" in body:
+        blocks = body["quiet_hours_blocks"]
+        if isinstance(blocks, list) and len(blocks) > 0:
+            _config["quiet_hours_blocks"] = [
+                [int(b["start"]), int(b["end"])] for b in blocks
+                if isinstance(b, dict) and "start" in b and "end" in b
+            ]
+        else:
+            _config["quiet_hours_blocks"] = [[0, 6]]
+    # 兼容旧版单段字段（也保留更新）
+    for k in ("quiet_hours_start", "quiet_hours_end"):
+        if k in body:
+            _config[k] = int(body[k])
+
     # 下次请求时自动重建 agent
     global _agent_ref
     _agent_ref = None
@@ -502,9 +755,20 @@ async def feishu_status():
 
 @app.get("/api/token-stats")
 async def token_stats():
-    """获取 Token 消耗统计。"""
+    """获取本月 Token 消耗统计。"""
     from companion.token_tracker import token_tracker
-    stats = token_tracker.get_stats()
+    import calendar
+    now = datetime.now()
+    # 当月第一天 00:00:00 (北京时间 UTC+8)
+    month_start = datetime(now.year, now.month, 1).isoformat()
+    stats = token_tracker.get_stats(since=month_start)
+    # 附加月份信息
+    year = now.year
+    month = now.month
+    _, days_in_month = calendar.monthrange(year, month)
+    stats["current_month"] = f"{year}-{month:02d}"
+    stats["days_elapsed"] = now.day
+    stats["days_total"] = days_in_month
     # 将 model_breakdown 中的价格对象简化，避免序列化问题
     for m, mb in stats.get("model_breakdown", {}).items():
         if "price" in mb:
@@ -536,10 +800,9 @@ async def websocket_chat(ws: WebSocket):
             # 发送"正在输入"状态
             await ws.send_json({"type": "status", "content": "thinking"})
 
-            # 获取 agent 并执行
+            # 获取 agent 并执行（wrapper.run() 已处理消息记录、HMM 状态和活人感）
             try:
                 wrapper = _get_or_create_agent()
-                # 通知 HMM 有用户消息
                 if wrapper.registry:
                     wrapper.registry.on_user_message()
 
@@ -548,22 +811,14 @@ async def websocket_chat(ws: WebSocket):
                     await ws.send_json({"type": "message", "content": response})
                 else:
                     await ws.send_json({"type": "error", "content": "抱歉，我出神了没听清… 能再说一遍吗？"})
-
-                # 更新 HMM 状态
-                if wrapper.registry:
-                    try:
-                        wrapper.registry.record_contact()
-                        wrapper.registry.exit_conversation()
-                    except Exception:
-                        pass
             except Exception as e:
                 logging.getLogger("companion").error(f"WebSocket 错误: {e}", exc_info=True)
                 await ws.send_json({"type": "error", "content": "抱歉，我出错了… 请稍后再试。"})
 
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger("companion").error(f"WebSocket 连接异常: {e}", exc_info=True)
     finally:
         if ws in _ws_clients:
             _ws_clients.remove(ws)

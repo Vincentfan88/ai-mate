@@ -14,9 +14,11 @@
 import argparse
 import asyncio
 import logging
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 # ── 解析命令行参数 ──────────────────────────────────────────────
 
@@ -47,6 +49,12 @@ def build_companion_agent(
     api_key: str = "cc-switch-proxy",
     model: str = "deepseek-v4-flash",
     max_steps: int = 5,
+    persona_path: Optional[str] = None,
+    local_model_enabled: bool = False,
+    local_model: str = "qwen3-4b",
+    local_api_base: str = "http://127.0.0.1:1234/v1",
+    user_name: str = "",
+    trigger_quiet_hours: tuple = None,
 ):
     """构建一个完整配置的 AI 伴侣 Agent 实例。
 
@@ -71,23 +79,44 @@ def build_companion_agent(
     from companion.token_tracker import token_tracker
 
     # 1. 创建模块注册表
+    if persona_path is None:
+        persona_path = str(Path(__file__).parent / "skills" / "companion" / f"{persona_name}.json")
     registry = CompanionRegistry(
         workspace=workspace,
         config_dir=str(Path(__file__).parent / "config"),
         mbti_type=mbti_type,
+        persona_name=persona_name,
+        persona_path=persona_path,
+        trigger_quiet_hours=trigger_quiet_hours,
     )
 
     # 2. 动态加载人格 → 系统提示词
     persona = load_persona(persona_name)
-    system_prompt = build_system_prompt(persona)
+    system_prompt = build_system_prompt(persona, user_name=user_name)
 
-    # 3. 创建 LLM 客户端 (通过 cc-switch 代理)
+    # 3. 创建 LLM 客户端（本地模型优先，否则按 API 地址动态判断 provider）
     retry_config = RetryConfig(enabled=True, max_retries=2)
+    if local_model_enabled and local_api_base:
+        actual_model = local_model
+        actual_api_base = local_api_base
+        actual_provider = "openai"  # 本地模型通常兼容 OpenAI 格式
+    else:
+        actual_model = model
+        actual_api_base = api_base
+        # 根据 API 地址动态判断 provider
+        api_lower = api_base.lower()
+        if "anthropic" in api_lower or "api.anthropic.com" in api_lower:
+            actual_provider = "anthropic"
+        elif "deepseek" in api_lower or "siliconflow" in api_lower:
+            actual_provider = "openai"  # DeepSeek/SiliconFlow 兼容 OpenAI 格式
+        else:
+            actual_provider = "openai"  # 默认 OpenAI 兼容格式
+
     llm = LLMClient(
         api_key=api_key,
-        provider="anthropic",
-        api_base=api_base,
-        model=model,
+        provider=actual_provider,
+        api_base=actual_api_base,
+        model=actual_model,
         retry_config=retry_config,
     )
 
@@ -101,10 +130,15 @@ def build_companion_agent(
         CompanionEmotionTool(registry),
         CompanionTriggerTool(registry),
         CompanionMBTITool(registry),
-        CompanionFeishuTool(),
         CompanionSceneTool(registry),
         CompanionTrendingTool(registry),
     ]
+
+    # 飞书 Tool — 仅在有凭据时注册
+    feishu_id = os.environ.get("FEISHU_APP_ID", "")
+    feishu_secret = os.environ.get("FEISHU_APP_SECRET", "")
+    if feishu_id and feishu_secret:
+        tools.append(CompanionFeishuTool(feishu_app_id=feishu_id, feishu_app_secret=feishu_secret))
 
     # 5. 创建 Agent — 包装 generate 以记录 token
     original_generate = llm.generate
@@ -112,10 +146,16 @@ def build_companion_agent(
     async def _tracked_generate(*args, **kwargs):
         response = await original_generate(*args, **kwargs)
         if response.usage:
+            cached = 0
+            if hasattr(response.usage, "prompt_tokens_details"):
+                cached = getattr(response.usage.prompt_tokens_details, "cached_tokens", 0) or 0
+            elif isinstance(response.usage, dict):
+                cached = response.usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
             token_tracker.record(
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
-                model=model,
+                model=actual_model,
+                cached_tokens=cached,
             )
         return response
 
@@ -127,7 +167,7 @@ def build_companion_agent(
         system_prompt=system_prompt,
         tools=tools,
         max_steps=max_steps,
-        workspace_dir=workspace,
+        workspace_dir=registry.workspace,
     )
 
     return agent, registry, persona
@@ -210,7 +250,6 @@ async def run_interactive_session(agent, registry, persona: dict, budget: float 
             print(f"{name}: 嗯~ 舍不得你走... 明天一定要找我哦 💕")
             break
         elif user_input == "/state":
-            from companion.modules.extras import TimeContext
             emotion = registry.emotion.get_current_emotion("time_passage")
             hmm_state = registry.trigger.hmm.current_state if hasattr(registry.trigger, "hmm") else "unknown"
             stage = registry.relationship.get_current_stage()
@@ -248,9 +287,13 @@ async def run_interactive_session(agent, registry, persona: dict, budget: float 
             if result:
                 # 持久化 AI 回复
                 registry.memory.add_conversation("assistant", result)
-                # 记录接触 + 通知 HMM 对话结束
-                registry.record_contact()
+                # 通知 HMM 对话结束
                 registry.exit_conversation()
+                # 活人感记录
+                registry.liveness.record_response(result)
+                # 定期保存活人感快照（每5轮）
+                if registry.liveness.current_session["total_messages"] % 5 == 0:
+                    registry.liveness.snapshot()
                 print(f"\n💕 {name} [{elapsed:.1f}s]:")
                 print(f"  {result}")
         except Exception as e:
@@ -264,7 +307,7 @@ async def run_interactive_session(agent, registry, persona: dict, budget: float 
 async def main():
     args = parse_args()
 
-    # 初始化日志系统
+    # 初始化日志系统（日志存放在基础 workspace 根目录）
     log_file = None if args.no_log_file else f"{args.workspace}/companion.log"
     from companion.logger import setup_logger
     setup_logger(level=args.log_level, log_file=log_file)
@@ -297,11 +340,15 @@ async def main():
     if stats["total_calls"] > 0:
         print(f"\n📊 会话统计: {stats['total_calls']} 次调用, {stats['total_tokens']:,} tokens, ¥{stats['total_cost']:.4f}")
 
-    # 会话结束时保存情绪残留
+    # 会话结束时保存情绪残留和活人感快照
     try:
         registry.emotion.save_residue()
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger("companion").warning(f"保存情绪残留失败: {e}")
+    try:
+        registry.liveness.snapshot()
+    except Exception as e:
+        logging.getLogger("companion").warning(f"保存活人感快照失败: {e}")
 
 
 if __name__ == "__main__":

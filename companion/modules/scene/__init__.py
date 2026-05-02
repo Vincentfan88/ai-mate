@@ -36,11 +36,16 @@ class SceneLibrary:
         with open(config_path) as f:
             config = json.load(f)
         self.scenes: Dict[str, Scene] = {}
-        for scene_id, data in config["scenes"].items():
+        scenes_data = config.get("scenes")
+        if not scenes_data:
+            raise ValueError(f"场景配置为空或缺失 'scenes' 字段: {config_path}")
+        for scene_id, data in scenes_data.items():
+            if "name" not in data:
+                raise ValueError(f"场景 '{scene_id}' 缺少必填字段 'name'")
             self.scenes[scene_id] = Scene(
                 id=scene_id,
                 name=data["name"],
-                base_weight=data["base_weight"],
+                base_weight=data.get("base_weight", 1.0),
                 suitable_moods=data.get("suitable_moods", []),
                 suitable_hours=data.get("suitable_hours", []),
                 prompt_hint=data.get("prompt_hint", ""),

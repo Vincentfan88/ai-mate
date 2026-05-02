@@ -1,12 +1,23 @@
 {
-  "weibull": {
-    "alpha": 1.5,
-    "beta": 12.0
+  "connection_axis": {
+    "growth_rate_per_hour": 0.08,
+    "threshold": 0.50,
+    "contact_reset": 0.40,
+    "drop_fraction": 0.4,
+    "min_value": 0.05,
+    "max_value": 1.0,
+    "sleep_growth_multiplier": 0.25
+  },
+  "pride_axis": {
+    "growth_per_message": 0.30,
+    "decay_per_minute": 0.98,
+    "sensitivity": 0.20
+  },
+  "cooling": {
+    "contact_cooldown_minutes": 30
   },
   "hard_filter": {
-    "quiet_hours": [0, 6],
-    "min_interval_hours": 4,
-    "max_daily_contacts": 3,
+    "quiet_hours": [[0, 6]],
     "externally_accessible": true
   },
   "states": {
@@ -17,16 +28,5 @@
     "checkin": {"weight": 0.25},
     "reflective": {"weight": 0.10},
     "playful": {"weight": 0.15}
-  },
-  "hour_bonus": {
-    "morning": 0.15,
-    "noon": 0.25,
-    "evening": 0.45,
-    "night": 0.30
-  },
-  "impulse": {
-    "threshold_low": 0.25,
-    "threshold_high": 0.55,
-    "weight": 0.3
   }
 }

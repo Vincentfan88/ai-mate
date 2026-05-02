@@ -48,6 +48,16 @@ function switchView(view) {
   if (view === 'chat') setTimeout(() => chatInput.focus(), 100);
 }
 
+// ── Tab Switching ──
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.tab === tabId)
+  );
+  document.querySelectorAll('.tab-content').forEach(content =>
+    content.classList.toggle('active', content.id === tabId)
+  );
+}
+
 // ── API ──
 async function loadConfig() {
   try {
@@ -78,8 +88,10 @@ async function saveAllSettings() {
     model: document.getElementById('inputModel').value || 'deepseek-v4-flash',
     api_base: document.getElementById('inputApiBase').value || 'https://api.deepseek.com/v1',
     api_key: document.getElementById('inputApiKey').value || '',
-    cloud_price_in: parseFloat(document.getElementById('inputCloudPriceIn').value) || 1.0,
-    cloud_price_out: parseFloat(document.getElementById('inputCloudPriceOut').value) || 4.0,
+    cloud_price_in: parseFloat(document.getElementById('inputPriceIn').value) || 1.0,
+    cloud_price_out: parseFloat(document.getElementById('inputPriceOut').value) || 4.0,
+    price_cache_in: parseFloat(document.getElementById('inputPriceCache').value) || 0.1,
+    user_name: document.getElementById('inputUserName').value || '',
     local_model_enabled: document.getElementById('localModelToggle').checked,
     local_model: document.getElementById('inputLocalModel').value || 'qwen3-4b',
     local_api_base: document.getElementById('inputLocalApiBase').value || 'http://127.0.0.1:1234/v1',
@@ -88,6 +100,10 @@ async function saveAllSettings() {
     feishu_app_secret: document.getElementById('feishuAppSecret').value || '',
     feishu_chat_id: document.getElementById('feishuChatId').value || '',
     budget: parseFloat(document.getElementById('inputBudget').value) || 0,
+    quiet_hours_blocks: quietBlocks.map(b => ({ start: b.start, end: b.end })),
+    // 兼容旧版字段
+    quiet_hours_start: quietBlocks.length > 0 ? quietBlocks[0].start : 0,
+    quiet_hours_end: quietBlocks.length > 0 ? quietBlocks[0].end : 6,
   };
 
   try {
@@ -128,24 +144,26 @@ async function refreshStats() {
     document.getElementById('statCalls').textContent = stats.total_calls.toLocaleString();
     document.getElementById('statTokens').textContent = formatBigNum(stats.total_tokens);
     document.getElementById('statCost').textContent = '¥' + stats.total_cost.toFixed(4);
-    document.getElementById('statAvg').textContent = stats.total_calls > 0
-      ? formatBigNum(stats.avg_tokens_per_call)
+    document.getElementById('statCacheRate').textContent = stats.cache_hit_rate != null
+      ? (stats.cache_hit_rate * 100).toFixed(1) + '%'
       : '—';
 
-    // 预算条
+    // 预算条 — 按本月
     const budget = currentConfig.budget || 0;
     const bar = document.getElementById('budgetBar');
     const fill = document.getElementById('budgetFill');
     const text = document.getElementById('budgetText');
+    const monthLabel = stats.current_month || '';
     if (budget > 0 && stats.total_calls > 0) {
       bar.style.display = '';
       const pct = Math.min(100, (stats.total_cost / budget) * 100);
       fill.style.width = pct + '%';
       fill.className = 'budget-fill' + (pct >= 100 ? ' danger' : pct >= 80 ? ' warn' : '');
       const remaining = budget - stats.total_cost;
-      text.textContent = remaining >= 0
-        ? `已用 ¥${stats.total_cost.toFixed(2)} / ¥${budget.toFixed(2)}，剩余 ¥${remaining.toFixed(2)}`
-        : `⚠️ 已超出预算 ¥${Math.abs(remaining).toFixed(2)}！`;
+      const dailyAvg = stats.days_elapsed > 0 ? (stats.total_cost / stats.days_elapsed).toFixed(2) : '—';
+      text.textContent = `${monthLabel} 已用 ¥${stats.total_cost.toFixed(2)} / ¥${budget.toFixed(2)}` +
+        (remaining >= 0 ? `，剩余 ¥${remaining.toFixed(2)}` : `，⚠️ 超出 ¥${Math.abs(remaining).toFixed(2)}！`) +
+        ` · 日均 ¥${dailyAvg}`;
     } else {
       bar.style.display = 'none';
     }
@@ -318,14 +336,47 @@ async function pollFeishuStatus() {
 }
 
 // ── Settings Form ──
+let quietBlocks = [];
+
+function renderQuietBlocks() {
+  const container = document.getElementById('quietBlocks');
+  if (!container) return;
+  container.innerHTML = quietBlocks.map((block, i) =>
+    `<div class="quiet-block">
+      <input type="number" value="${block.start}" min="0" max="23" step="1"
+        onchange="updateBlock(${i}, 'start', this.value)">
+      <span class="inline-label">点 至</span>
+      <input type="number" value="${block.end}" min="0" max="23" step="1"
+        onchange="updateBlock(${i}, 'end', this.value)">
+      <span class="inline-label">点</span>
+      <button class="remove-block-btn" onclick="removeBlock(${i})">删除</button>
+    </div>`
+  ).join('');
+}
+
+function addQuietBlock() {
+  quietBlocks.push({ start: 9, end: 12 });
+  renderQuietBlocks();
+}
+
+function removeBlock(index) {
+  quietBlocks.splice(index, 1);
+  renderQuietBlocks();
+}
+
+function updateBlock(index, field, value) {
+  quietBlocks[index][field] = parseInt(value) || 0;
+}
 async function loadSettingsForm() {
   await loadConfig();
   document.getElementById('selMbti').value = currentConfig.mbti || 'ENFP';
   document.getElementById('inputModel').value = currentConfig.model || '';
   document.getElementById('inputApiBase').value = currentConfig.api_base || '';
   document.getElementById('inputApiKey').value = currentConfig.api_key || '';
-  document.getElementById('inputCloudPriceIn').value = currentConfig.cloud_price_in || 1.0;
-  document.getElementById('inputCloudPriceOut').value = currentConfig.cloud_price_out || 4.0;
+  document.getElementById('inputPriceIn').value = currentConfig.cloud_price_in || 1.0;
+  document.getElementById('inputPriceOut').value = currentConfig.cloud_price_out || 4.0;
+  document.getElementById('inputPriceCache').value = currentConfig.price_cache_in || 0.1;
+  document.getElementById('inputUserName').value = currentConfig.user_name || '';
 
   // 本地模型设置
   document.getElementById('localModelToggle').checked = currentConfig.local_model_enabled || false;
@@ -341,6 +392,19 @@ async function loadSettingsForm() {
 
   // 预算
   document.getElementById('inputBudget').value = currentConfig.budget || '';
+
+  // 免打扰时段（新版多段）
+  const blocks = currentConfig.quiet_hours_blocks;
+  if (blocks && Array.isArray(blocks) && blocks.length > 0) {
+    quietBlocks = blocks.map(b => ({ start: b[0], end: b[1] }));
+  } else {
+    // 兼容旧版单段字段
+    quietBlocks = [{
+      start: currentConfig.quiet_hours_start ?? 0,
+      end: currentConfig.quiet_hours_end ?? 6,
+    }];
+  }
+  renderQuietBlocks();
 
   // 加载头像预览
   updateAvatarPreview('ai');
@@ -499,6 +563,159 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Persona Generation ──
+let pendingPersona = null;
+
+async function generatePersona() {
+  const desc = document.getElementById('inputPersonaDesc').value.trim();
+  if (!desc) {
+    showToast('请先描述你想要的角色');
+    return;
+  }
+
+  const btn = document.getElementById('generatePersonaBtn');
+  btn.textContent = '生成中…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/generate-persona', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || '生成失败');
+    }
+
+    const data = await res.json();
+    if (data.status === 'ok') {
+      pendingPersona = data.persona;
+      showPersonaPreview(data.persona);
+    }
+  } catch (e) {
+    showToast('❌ ' + e.message);
+  } finally {
+    btn.textContent = '✨ 智能生成';
+    btn.disabled = false;
+  }
+}
+
+function showPersonaPreview(persona) {
+  const p = persona.personality || {};
+  const style = persona.speaking_style || {};
+  const bg = persona.background || {};
+
+  const html = `
+    <div class="persona-preview-section">
+      <div class="label">名称</div>
+      <div class="value">${escHtml(persona.name || '未命名')}</div>
+    </div>
+    <div class="persona-preview-section">
+      <div class="label">描述</div>
+      <div class="value">${escHtml(persona.description || '')}</div>
+    </div>
+    <div class="persona-preview-section">
+      <div class="label">核心特质</div>
+      <div class="value">${(p.core_traits || []).map(t => `<span class="trait-tag">${escHtml(t)}</span>`).join('')}</div>
+    </div>
+    <div class="persona-preview-section">
+      <div class="label">打招呼</div>
+      <div class="value">${escHtml(persona.greeting || '')}</div>
+    </div>
+    <div class="persona-preview-section">
+      <div class="label">语气词</div>
+      <div class="value">${(style.particles || []).map(t => `<span class="trait-tag">${escHtml(t)}</span>`).join('')}</div>
+    </div>
+    <div class="persona-preview-section">
+      <div class="label">肢体动作</div>
+      <div class="value">${(style.actions || []).map(t => `<span class="trait-tag">${escHtml(t)}</span>`).join('')}</div>
+    </div>
+    <div class="persona-preview-section">
+      <div class="label">关系</div>
+      <div class="value">${escHtml(bg.relationship || '')}</div>
+    </div>
+  `;
+
+  document.getElementById('personaPreview').innerHTML = html;
+  document.getElementById('personaModal').classList.add('show');
+}
+
+function closePersonaModal() {
+  document.getElementById('personaModal').classList.remove('show');
+  pendingPersona = null;
+}
+
+async function confirmPersona() {
+  if (!pendingPersona) return;
+
+  const safeName = (pendingPersona.name || 'generated_character').replace(/[^a-zA-Z0-9\u4e00-\u9fff _-]/g, '').trim();
+  const filename = safeName || 'generated_character';
+
+  try {
+    const res = await fetch('/api/save-persona', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: filename, persona: pendingPersona }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || '保存失败');
+    }
+
+    const data = await res.json();
+    closePersonaModal();
+    document.getElementById('inputPersonaDesc').value = '';
+
+    await loadPersonas();
+    document.getElementById('selPersona').value = data.persona.name;
+
+    showToast(`✅ 角色 "${data.persona.label}" 已创建`);
+    switchView('chat');
+  } catch (e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Persona Delete ──
+async function deletePersona() {
+  const sel = document.getElementById('selPersona');
+  const name = sel.value;
+  if (!name) {
+    showToast('请先选择要删除的角色');
+    return;
+  }
+  if (!confirm(`确定删除角色 "${name}" 吗？此操作不可恢复。`)) {
+    return;
+  }
+  try {
+    const res = await fetch('/api/delete-persona', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '删除失败');
+    showToast(`✅ 角色 "${name}" 已删除`);
+    await loadPersonas();
+    // 保存配置时刷新当前选中
+    const config = await fetch('/api/config').then(r => r.json());
+    if (config.persona && document.getElementById('selPersona').options.length) {
+      document.getElementById('selPersona').value = config.persona;
+    }
+  } catch (e) {
+    showToast('❌ ' + e.message);
+  }
 }
 
 // ── Start ──

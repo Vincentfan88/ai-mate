@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 class MdConversationLog(ConversationLog):
     """全量对话日志 — MD 格式，按日期归档"""
 
-    def __init__(self, log_dir: str = "workspace/companion/conversations"):
+    def __init__(self, log_dir: str = "workspace/companion/conversations", ai_name: str = "AI"):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.ai_name = ai_name
 
     def append(self, role: str, content: str, timestamp: str = None) -> None:
         """追加对话到当日 MD 文件"""
@@ -30,7 +31,7 @@ class MdConversationLog(ConversationLog):
         if not file_path.exists():
             file_path.write_text(f"# {date_str} 对话记录\n\n", encoding="utf-8")
 
-        role_label = "User" if role == "user" else "小美"
+        role_label = "User" if role == "user" else self.ai_name
         entry = f"## {time_str}\n**{role_label}**: {content}\n\n"
 
         with open(file_path, "a", encoding="utf-8") as f:
@@ -51,14 +52,13 @@ class MdConversationLog(ConversationLog):
         """获取最近 N 轮对话"""
         all_entries = []
         files = sorted(self.log_dir.glob("*.md"))
-        # 按日期从后往前读取，直到收集够 limit 条
-        for file_path in reversed(files):
+        # 从最新文件往前读，直到收集够 limit 条
+        max_files = min(len(files), 30)  # 最多读 30 天
+        for file_path in reversed(files[-max_files:]):
             content = file_path.read_text(encoding="utf-8")
             entries = self._parse_md(content)
             all_entries = entries + all_entries
-            if len(all_entries) >= limit and len(files) - files.index(file_path) >= 3:
-                break  # 至少读了 3 天且已够 limit
-            if len(all_entries) >= limit * 3:  # 避免读太多文件
+            if len(all_entries) >= limit:
                 break
 
         return all_entries[-limit:]
@@ -66,9 +66,9 @@ class MdConversationLog(ConversationLog):
     def _parse_md(self, content: str) -> List[dict]:
         """解析 MD 格式为结构化对话"""
         entries = []
-        # 匹配 "## HH:MM\n**User/小美**: 内容"
+        # 匹配 "## HH:MM\n**User/{ai_name}**: 内容"
         pattern = re.compile(
-            r"## (\d{2}:\d{2})\n\*\*(User|小美)\*\*: (.+?)(?=\n\n|\n##|$)",
+            rf"## (\d{{2}}:\d{{2}})\n\*\*(User|{re.escape(self.ai_name)})\*\*: (.+?)(?=\n\n|\n##|$)",
             re.DOTALL,
         )
         for match in pattern.finditer(content):

@@ -166,6 +166,7 @@ class PreferenceInfer:
         self.data_path.parent.mkdir(parents=True, exist_ok=True)
         self._beliefs: List[PreferenceBelief] = self._load_beliefs()
         self._llm_client: Any = None  # 可选，由外部注入
+        self._interaction_cache: Any = None  # 可选，由外部注入
 
     def _load_beliefs(self) -> List[PreferenceBelief]:
         if self.data_path.exists():
@@ -200,13 +201,23 @@ class PreferenceInfer:
         self._run_maintenance()
         return self._active_result()
 
+    def set_interaction_cache(self, cache: Any) -> None:
+        """注入交互缓存，让推断可以读取最近对话"""
+        self._interaction_cache = cache
+
     def _extract_signals(self) -> List[str]:
-        """从事实存储中提取近期信号"""
+        """从事实存储 + 交互缓存中提取近期信号"""
         facts = self.store.get_user_facts()
-        interactions = self.store.get_recent_interactions(limit=20)
         signals = []
         for f in facts:
             signals.append(f.get("content", ""))
+
+        # 优先使用已注入的交互缓存
+        if self._interaction_cache is not None:
+            interactions = self._interaction_cache.get_recent(limit=20)
+        else:
+            interactions = self.store.get_recent_interactions(limit=20)
+
         for ix in interactions:
             signals.append(f"{ix.get('role', 'user')}: {ix.get('content', '')}")
         return signals
@@ -232,9 +243,17 @@ class PreferenceInfer:
             # Mini-Agent LLMClient uses async generate()
             if hasattr(llm_client, "generate"):
                 import asyncio
-                loop = asyncio.get_event_loop()
                 messages = [{"role": "user", "content": prompt}]
-                response = loop.run_until_complete(llm_client.generate(messages))
+                try:
+                    loop = asyncio.get_running_loop()
+                    response = asyncio.run_coroutine_threadsafe(
+                        llm_client.generate(messages), loop
+                    ).result(timeout=30)
+                except RuntimeError:
+                    # No running loop — safe to create a new one
+                    response = asyncio.new_event_loop().run_until_complete(
+                        llm_client.generate(messages)
+                    )
                 text = response.content if hasattr(response, "content") else str(response)
             elif hasattr(llm_client, "chat"):
                 text = llm_client.chat([{"role": "user", "content": prompt}])
