@@ -43,8 +43,8 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["mini_agent*"]
-exclude = ["tests*"]
+include = ["mini_agent*", "companion*"]
+exclude = ["tests*", "workspace*"]
 
 # Include skills directory (git submodule) as package data
 # After moving submodule to mini_agent/skills

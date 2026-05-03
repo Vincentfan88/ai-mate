@@ -3,3 +3,9 @@ include mini_agent/skills/README.md
 include mini_agent/skills/THIRD_PARTY_NOTICES.md
 include mini_agent/skills/agent_skills_spec.md
 
+# Exclude runtime data
+recursive-exclude workspace *
+global-exclude .env
+global-exclude *.pyc
+global-exclude __pycache__
+
