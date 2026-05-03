@@ -13,9 +13,6 @@
     "decay_per_minute": 0.98,
     "sensitivity": 0.20
   },
-  "cooling": {
-    "contact_cooldown_minutes": 30
-  },
   "hard_filter": {
     "quiet_hours": [[0, 6]],
     "externally_accessible": true
