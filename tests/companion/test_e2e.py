@@ -262,11 +262,11 @@ class TestEndToEnd:
         """Test: anniversary and habit tracking work end-to-end."""
         from datetime import datetime
 
-        # Add anniversary
-        registry.anniversary.add_anniversary("认识纪念日", datetime(2025, 4, 30))
+        # Add anniversary via unified time_awareness
+        registry.time_awareness.add_anniversary("认识纪念日", datetime(2025, 4, 30))
 
         # Check on anniversary date
-        hits = registry.anniversary.check_today(datetime(2026, 4, 30))
+        hits = registry.time_awareness.check_anniversaries_today(datetime(2026, 4, 30))
         assert len(hits) == 1
         assert "1 周年" in hits[0]
 

@@ -108,21 +108,21 @@ class TestDeadCodeRemoval:
 # ============================================================
 
 class TestAnniversaryIntegration:
-    """Verify anniversary module is integrated."""
+    """Verify anniversary module is integrated (now via unified TimeAwareness)."""
 
-    def test_anniversary_scene_in_tools(self):
-        """CompanionStateTool or another tool should expose anniversary info."""
+    def test_anniversary_accessible_via_registry(self):
+        """Anniversary operations should be accessible via time_awareness."""
         from companion.agent.tools import CompanionStateTool
         from companion.modules.registry import CompanionRegistry
         with tempfile.TemporaryDirectory() as td:
             reg = CompanionRegistry(workspace=td, config_dir=str(
                 Path(__file__).parent.parent.parent / "companion" / "config"
             ))
-            # Should be accessible
-            anniv = reg.anniversary
-            assert anniv is not None
-            # Should have at least basic functionality
-            assert hasattr(anniv, "check_today") or hasattr(anniv, "get_days_together")
+            # Should be accessible via time_awareness
+            time_mgr = reg.time_awareness
+            assert time_mgr is not None
+            # Should have anniversary methods
+            assert hasattr(time_mgr, "check_anniversaries_today") or hasattr(time_mgr, "add_anniversary")
 
     def test_anniversary_in_proactive_loop(self):
         """ProactiveLoop should check anniversary as a trigger."""
@@ -130,7 +130,7 @@ class TestAnniversaryIntegration:
         import inspect
         source = inspect.getsource(ProactiveLoop)
         # Should mention anniversary or check it in _check_trigger
-        assert "anniversary" in source.lower() or "check_today" in source
+        assert "anniversary" in source.lower()
 
 
 # ============================================================

@@ -35,15 +35,27 @@ class TestConnectionAxis:
             value = axis.tick()
             assert value <= 1.0
 
-    def test_sleep_growth_decelerated(self):
-        """Connection should grow slower during quiet hours."""
+    def test_large_gap_uses_neutral_multiplier(self):
+        """Large time gaps (>1h) should use neutral multiplier=1.0, not quiet hours rate."""
         with tempfile.TemporaryDirectory() as td:
             axis = ConnectionAxis(state_path=f"{td}/conn.json", growth_rate_per_hour=0.10)
-            axis._initialized_at = datetime.now() - timedelta(hours=10)
-            # At 3 AM (quiet hours): growth should be ×0.25
-            value = axis.tick(now=datetime.now().replace(hour=3, minute=0), quiet_hours=(0, 6))
-            # 10h * 0.10 * 0.25 = 0.25, with noise → roughly 0.2-0.3
-            assert value <= 0.4
+            # Use absolute times so delta is exactly 10h regardless of when test runs
+            now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+            axis._initialized_at = now - timedelta(hours=10)
+            value = axis.tick(now=now, quiet_hours=(0, 6))
+            # 10h * 0.10 * 1.0 * (1 ±10%) = ~1.0, capped at max=1.0
+            assert value >= 0.8
+
+    def test_small_quiet_tick_growth_decelerated(self):
+        """Small ticks within quiet hours should use ×0.25 growth multiplier."""
+        with tempfile.TemporaryDirectory() as td:
+            axis = ConnectionAxis(state_path=f"{td}/conn.json", growth_rate_per_hour=0.10, min_value=0.0)
+            now = datetime.now().replace(hour=3, minute=0, second=0, microsecond=0)
+            axis._last_tick_at = now - timedelta(minutes=30)
+            axis._initialized_at = now - timedelta(hours=1)
+            value = axis.tick(now=now, quiet_hours=(0, 6))
+            # 0.5h * 0.10 * 0.25 * (1 ±10%) = 0.011~0.014 (no min_value floor)
+            assert 0.008 <= value <= 0.016
 
     def test_normal_growth_outside_quiet(self):
         """Connection should grow at full rate outside quiet hours."""
@@ -194,47 +206,8 @@ class TestPrideAxis:
             assert abs(p2.get_pride() - v1) < 0.01
 
 
-class TestCooling:
-    """Test cooling — AI should not trigger immediately after last contact."""
-
-    def test_cooling_blocks_trigger_within_30_min(self):
-        """Should not trigger within cooldown period."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = _make_config(tmpdir)
-            engine = TriggerEngine(config_path=config)
-            # Simulate connection just triggered (last_contact_at = now - 10 min)
-            engine.connection_axis.on_contact(now=datetime.now() - timedelta(minutes=10))
-            # High connection, but within cooling period
-            engine.connection_axis._value = 0.60
-            decision = engine.compute()
-            assert not decision.should_trigger
-            assert "cooldown" in decision.nudge or "刚" in decision.hold_back
-
-    def test_cooling_allows_after_30_min(self):
-        """Should allow trigger after cooldown expires."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = _make_config(tmpdir)
-            engine = TriggerEngine(config_path=config)
-            # last_contact_at = 35 min ago
-            engine.connection_axis.on_contact(now=datetime.now() - timedelta(minutes=35))
-            engine.connection_axis._value = 0.60
-            decision = engine.compute()
-            assert decision.should_trigger is True
-
-    def test_cooling_configurable(self):
-        """Cooldown duration should be configurable."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = _make_config(tmpdir, cooldown_minutes=15)
-            engine = TriggerEngine(config_path=config)
-            # 20 min after contact with 15 min cooldown: should trigger
-            engine.connection_axis.on_contact(now=datetime.now() - timedelta(minutes=20))
-            engine.connection_axis._value = 0.60
-            decision = engine.compute()
-            assert decision.should_trigger is True
-
-
 class TestIntegration:
-    """Test pride + connection + cooling integration."""
+    """Test pride + connection integration."""
 
     def test_on_user_message_updates_pride_and_connection(self):
         """on_user_message should update both pride and connection."""
@@ -362,7 +335,7 @@ class TestTriggerEngine:
             assert isinstance(decision.should_trigger, bool)
 
 
-def _make_config(tmpdir: str, cooldown_minutes: int = 30) -> str:
+def _make_config(tmpdir: str) -> str:
     """Create a temporary config file for testing."""
     config = {
         "connection_axis": {
@@ -378,9 +351,6 @@ def _make_config(tmpdir: str, cooldown_minutes: int = 30) -> str:
             "growth_per_message": 0.30,
             "decay_per_minute": 0.98,
             "sensitivity": 0.20,
-        },
-        "cooling": {
-            "contact_cooldown_minutes": cooldown_minutes,
         },
         "hard_filter": {
             "quiet_hours": [[0, 6]],

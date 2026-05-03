@@ -264,9 +264,13 @@ class TestTrendingFetcher:
         fetcher = TrendingFetcher(registry, fetch_interval=3600)
         assert fetcher.fetch_interval == 3600
         assert fetcher._running is False
+        assert fetcher.api_key == ""
+        assert fetcher.api_base == ""
+        assert fetcher.model == ""
 
     @pytest.mark.asyncio
     async def test_fetch_saves_topics(self, registry):
+        """Test Baidu fallback path when no LLM credentials."""
         fetcher = TrendingFetcher(registry)
 
         import unittest.mock as mock
@@ -282,6 +286,66 @@ class TestTrendingFetcher:
         assert topics is not None
         assert len(topics) == 2
         assert topics[0]["title"] == "测试热搜1"
+
+    @pytest.mark.asyncio
+    async def test_fetch_baidu_first_llm_fallback(self, registry):
+        """Baidu succeeds, should use Baidu (not LLM)."""
+        fetcher = TrendingFetcher(
+            registry,
+            api_key="test-key",
+            api_base="https://api.example.com/v1",
+            model="test-model",
+        )
+
+        import unittest.mock as mock
+        mock_resp = mock.MagicMock(text='{"word":"百度热搜1"}{"word":"百度热搜2"}')
+        mock_client_ctx = mock.AsyncMock()
+        mock_client_ctx.__aenter__.return_value.get.return_value = mock_resp
+        mock_client_ctx.__aexit__.return_value = None
+
+        with mock.patch("httpx.AsyncClient", return_value=mock_client_ctx):
+            await fetcher._fetch()
+
+        # Baidu should have been used, not LLM
+        topics = registry.trending.get()
+        assert topics is not None
+        assert len(topics) == 2
+        assert "百度热搜" in topics[0]["title"]
+
+    @pytest.mark.asyncio
+    async def test_fetch_llm_when_baidu_fails(self, registry):
+        """When Baidu fails, should fall back to LLM."""
+        fetcher = TrendingFetcher(
+            registry,
+            api_key="test-key",
+            api_base="https://api.example.com/v1",
+            model="test-model",
+        )
+
+        import unittest.mock as mock
+        async def mock_get(*args, **kwargs):
+            raise Exception("Baidu unavailable")
+
+        mock_response_data = {
+            "choices": [{"message": {"content": "LLM话题一\nLLM话题二\nLLM话题三"}}]
+        }
+        mock_resp = mock.MagicMock()
+        mock_resp.json.return_value = mock_response_data
+        mock_resp.raise_for_status.return_value = None
+
+        mock_client_ctx = mock.AsyncMock()
+        mock_client_ctx.__aenter__.return_value.get.side_effect = mock_get
+        mock_client_ctx.__aenter__.return_value.post.return_value = mock_resp
+        mock_client_ctx.__aexit__.return_value = None
+
+        with mock.patch("httpx.AsyncClient", return_value=mock_client_ctx):
+            await fetcher._fetch()
+
+        # LLM fallback should have been used
+        topics = registry.trending.get()
+        assert topics is not None
+        assert len(topics) == 3
+        assert topics[0]["title"] == "LLM话题一"
 
     @pytest.mark.asyncio
     async def test_fetch_overwrites_cache(self, registry):

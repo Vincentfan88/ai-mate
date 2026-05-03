@@ -1,4 +1,4 @@
-"""Tests for extras module — time context, anniversary, habits, trending."""
+"""Tests for extras module — time context, habits, trending."""
 
 import json
 import tempfile
@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 
 from companion.modules.extras import (
     TimeContext,
-    AnniversaryTracker,
     HabitTracker,
     TrendingCache,
 )
+from companion.modules.extras.time_awareness import TimeAwareness, TimeEvent
 
 
 class TestTimeContext:
@@ -37,41 +37,45 @@ class TestTimeContext:
 
 
 class TestAnniversaryTracker:
-    """Test anniversary tracking."""
+    """Test anniversary tracking via TimeAwareness (merged)."""
 
     def test_add_and_check(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            state_path = f"{tmpdir}/anniversaries.json"
-            tracker = AnniversaryTracker(start_date=datetime(2025, 4, 30), state_path=state_path)
+            state_path = f"{tmpdir}/temporal_events.json"
+            tracker = TimeAwareness(state_path=state_path)
             tracker.add_anniversary("认识纪念日", datetime(2025, 4, 30))
-            hits = tracker.check_today(datetime(2026, 4, 30))
+            hits = tracker.check_anniversaries_today(datetime(2026, 4, 30))
             assert len(hits) == 1
             assert "1 周年" in hits[0]
 
     def test_no_anniversary(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            state_path = f"{tmpdir}/anniversaries.json"
-            tracker = AnniversaryTracker(start_date=datetime(2025, 1, 1), state_path=state_path)
-            hits = tracker.check_today(datetime(2026, 4, 30))
+            state_path = f"{tmpdir}/temporal_events.json"
+            tracker = TimeAwareness(state_path=state_path)
+            hits = tracker.check_anniversaries_today(datetime(2026, 4, 30))
             assert len(hits) == 0
 
     def test_days_since_start(self):
+        """Test get_start_date for calculating days together."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            state_path = f"{tmpdir}/anniversaries.json"
-            tracker = AnniversaryTracker(start_date=datetime(2026, 4, 20), state_path=state_path)
-            days = tracker.days_since_start(datetime(2026, 4, 30))
-            assert days == 10
+            state_path = f"{tmpdir}/temporal_events.json"
+            tracker = TimeAwareness(state_path=state_path)
+            tracker.add_anniversary("相识纪念日", datetime(2026, 4, 20))
+            start = tracker.get_start_date()
+            assert start is not None
+            assert start.month == 4
+            assert start.day == 20
 
     def test_persistence(self):
         """Anniversary state should persist across restarts."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            state_path = f"{tmpdir}/anniversaries.json"
-            tracker = AnniversaryTracker(start_date=datetime(2025, 1, 1), state_path=state_path)
+            state_path = f"{tmpdir}/temporal_events.json"
+            tracker = TimeAwareness(state_path=state_path)
             tracker.add_anniversary("恋爱纪念日", datetime(2025, 4, 30))
 
             # New instance should load persisted state
-            tracker2 = AnniversaryTracker(state_path=state_path)
-            hits = tracker2.check_today(datetime(2026, 4, 30))
+            tracker2 = TimeAwareness(state_path=state_path)
+            hits = tracker2.check_anniversaries_today(datetime(2026, 4, 30))
             assert len(hits) == 1
             assert "1 周年" in hits[0]
 
@@ -120,7 +124,7 @@ class TestHabitTracker:
             )
             emoji1 = tracker.get_daily_emoji(now=now)
 
-            # New instance — same day, same emoji
+            # New instance —same day, same emoji
             tracker2 = HabitTracker(
                 config_path="companion/config/habits.json",
                 state_path=state_path,

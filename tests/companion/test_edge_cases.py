@@ -477,33 +477,33 @@ class TestSilentAgentWrapperEdgeCases:
 
     @pytest.mark.asyncio
     async def test_wrapper_empty_response(self):
-        """Agent 返回空字符串应传递。"""
+        """Agent 返回空字符串应返回 (empty response) 并记录日志。"""
         from companion.webui.agent_wrapper import SilentAgentWrapper
         agent = AsyncMock()
         agent.run = AsyncMock(return_value="")
         wrapper = SilentAgentWrapper(agent)
         result = await wrapper.run("你好")
-        assert result is not None
+        assert result == "(empty response)"
 
     @pytest.mark.asyncio
     async def test_wrapper_none_response(self):
-        """Agent 返回 None 应传递。"""
+        """Agent 返回 None 应返回 (empty response)。"""
         from companion.webui.agent_wrapper import SilentAgentWrapper
         agent = AsyncMock()
         agent.run = AsyncMock(return_value=None)
         wrapper = SilentAgentWrapper(agent)
         result = await wrapper.run("你好")
-        assert result is not None
+        assert result == "(empty response)"
 
     @pytest.mark.asyncio
     async def test_wrapper_llm_error_passthrough(self):
-        """LLM call failed 前缀应透传。"""
+        """LLM call failed 和 Task couldn't be completed 应返回 (empty response)。"""
         from companion.webui.agent_wrapper import SilentAgentWrapper
         agent = AsyncMock()
         agent.run = AsyncMock(return_value="LLM call failed: timeout")
         wrapper = SilentAgentWrapper(agent)
         result = await wrapper.run("你好")
-        assert "LLM call failed" in result
+        assert result == "(empty response)"
 
     @pytest.mark.asyncio
     async def test_wrapper_adds_user_conversation(self):
