@@ -32,19 +32,30 @@ ai-mate 是一个基于 Mini-Agent 框架的 AI 伙伴系统。它将 24K 行 Fl
 #### 2. 安装
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-mate.git
+git clone https://github.com/Vincentfan88/ai-mate.git
 cd ai-mate
-uv sync
 ```
 
-#### 3. 配置
+#### 3. 安装依赖
+
+推荐用 [uv](https://github.com/astral-sh/uv)（快速 Python 包管理器）：
+
+```bash
+# 方式一：用 uv（推荐）
+uv sync
+
+# 方式二：用 pip
+pip install -e .
+```
+
+#### 4. 配置
 
 ```bash
 cp .env.example .env
 # 编辑 .env，填入你的 LLM API 密钥
 ```
 
-支持任何兼容 OpenAI API 格式的模型服务（DeepSeek、SiliconFlow 等）。
+支持任何兼容 OpenAI API 格式的模型服务（DeepSeek、SiliconFlow、Claude 等）。
 
 #### 4. 运行
 
@@ -125,19 +136,30 @@ ai-mate is an AI mate system built on the Mini-Agent framework. It ported the "a
 #### 2. Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-mate.git
+git clone https://github.com/Vincentfan88/ai-mate.git
 cd ai-mate
-uv sync
 ```
 
-#### 3. Configure
+#### 3. Install Dependencies
+
+Recommended: [uv](https://github.com/astral-sh/uv) (fast Python package manager):
+
+```bash
+# Option 1: Using uv (recommended)
+uv sync
+
+# Option 2: Using pip
+pip install -e .
+```
+
+#### 4. Configure
 
 ```bash
 cp .env.example .env
 # Edit .env with your LLM API key
 ```
 
-Supports any OpenAI-compatible API service (DeepSeek, SiliconFlow, etc.).
+Supports any OpenAI-compatible API service (DeepSeek, SiliconFlow, Claude, etc.).
 
 #### 4. Run
 
