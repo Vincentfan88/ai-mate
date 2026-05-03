@@ -1,6 +1,6 @@
 """飞书 Bot — 长连接（WebSocket）集成。
 
-使用 lark-oapi SDK 实现飞书长连接 Bot：
+使用 lark-oapi SDK (v1.5.x) 实现飞书长连接 Bot：
 - daemon thread 运行 lark.ws.Client 接收事件
 - asyncio.run_coroutine_threadsafe 调度到主事件循环
 - API client 回复消息
@@ -21,6 +21,8 @@ import threading
 from typing import Callable, Optional
 
 import lark_oapi as lark
+from lark_oapi.event.dispatcher_handler import EventDispatcherHandler
+from lark_oapi.api.im.v1.model.p2_im_message_receive_v1 import P2ImMessageReceiveV1
 
 logger = logging.getLogger(__name__)
 
@@ -123,34 +125,37 @@ class FeishuBot:
 
     def _run_ws(self) -> None:
         """在 daemon thread 中运行 ``lark.ws.Client``。"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
         try:
-            handler = lark.ws.EventHandler()
-            handler.register("im.message.receive_v1", self._on_ws_event)
+            # 关键修复：lark_oapi.ws.client 在 import 时捕获了主线程的 uvloop，
+            # 必须替换为当前线程的独立事件循环，否则 run_until_complete 会报错
+            import lark_oapi.ws.client as _ws_client_mod
+            fresh_loop = asyncio.new_event_loop()
+            _ws_client_mod.loop = fresh_loop
+            asyncio.set_event_loop(fresh_loop)
 
-            self._ws_client = lark.ws.Client.builder() \
-                .app_id(self._app_id) \
-                .app_secret(self._app_secret) \
-                .event_handler(handler) \
+            # 构建事件处理器（lark-oapi v1.5.x API）
+            event_handler = EventDispatcherHandler.builder("", "") \
+                .register_p2_im_message_receive_v1(self._on_message_event) \
                 .build()
+
+            self._ws_client = lark.ws.Client(
+                app_id=self._app_id,
+                app_secret=self._app_secret,
+                event_handler=event_handler,
+                auto_reconnect=True,
+            )
 
             self._ready.set()
 
-            # start() 是阻塞的，SDK 内部维护 WS 连接
+            # SDK 内部使用 run_until_complete + run_forever 维护连接
             self._ws_client.start()
 
         except Exception as e:
-            logger.error("FeishuBot WS 异常退出: %s", e)
+            logger.error("FeishuBot WS 异常退出: %s", e, exc_info=True)
             self._ready.clear()
-        finally:
-            loop.close()
 
-    # ── 事件处理 ──────────────────────────────────────────
-
-    def _on_ws_event(self, event) -> None:
-        """WS 事件回调 — 在 daemon thread 中执行。
+    def _on_message_event(self, data: P2ImMessageReceiveV1) -> None:
+        """消息事件回调 — 在 daemon thread 中执行。
 
         立即返回（ack），将实际处理调度到主事件循环。
         """
@@ -158,7 +163,8 @@ class FeishuBot:
             return
 
         try:
-            message = event.event.message
+            event_data = data.event
+            message = event_data.message
             if message.message_type != MESSAGE_TYPE_TEXT:
                 return
 
@@ -170,6 +176,18 @@ class FeishuBot:
             chat_id = message.chat_id
             if not chat_id:
                 return
+
+            # 收到消息后，给用户的消息点上 ❤️ 作为回应（更自然）
+            message_id = message.message_id
+            if message_id:
+                future = asyncio.run_coroutine_threadsafe(
+                    self._send_reaction(message_id, "HEART"),
+                    self._loop,
+                )
+                try:
+                    future.result(timeout=3)
+                except Exception as e:
+                    logger.warning("FeishuBot 表情回应失败: %s", e)
 
             # 调度到主事件循环
             asyncio.run_coroutine_threadsafe(
@@ -200,9 +218,11 @@ class FeishuBot:
 
         try:
             response = await agent.run(text)
-            if not response:
+            if not response or response in ("(empty response)", "(empty)"):
+                logger.warning(f"[FeishuBot] 空响应 (agent.run returned: {repr(response)[:60]}), 消息: {text[:40]}")
                 response = "嗯~ 我在听呢，你想说什么呀？"
-            if response.startswith("LLM call failed"):
+            if response.startswith("LLM call failed") or response.startswith("Task couldn't be completed"):
+                logger.warning(f"[FeishuBot] LLM 错误: {response[:80]}")
                 response = "抱歉，我刚刚走神了… 能再说一遍吗？"
         except Exception as e:
             logger.error("FeishuBot agent.run 异常: %s", e, exc_info=True)
@@ -235,3 +255,25 @@ class FeishuBot:
             )
         except Exception as e:
             logger.warning("FeishuBot 发送消息失败: %s", e)
+
+    async def _send_reaction(self, message_id: str, emoji_type: str) -> None:
+        """对用户的消息添加表情回应（ACK，比文字更自然）。"""
+        emoji = lark.im.v1.Emoji.builder() \
+            .emoji_type(emoji_type) \
+            .build()
+        request = lark.im.v1.CreateMessageReactionRequest.builder() \
+            .message_id(message_id) \
+            .request_body(
+                lark.im.v1.CreateMessageReactionRequestBody.builder()
+                    .reaction_type(emoji)
+                    .build()
+            ).build()
+
+        try:
+            await self._loop.run_in_executor(
+                None,
+                self._api_client.im.v1.message_reaction.create,
+                request,
+            )
+        except Exception as e:
+            logger.warning("FeishuBot 添加表情回应失败: %s", e)

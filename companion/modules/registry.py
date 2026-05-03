@@ -4,13 +4,15 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from companion.modules.memory import MemorySystem
+from companion.modules.memory.flashback import FlashbackEngine
 from companion.modules.emotion import EmotionSystem
 from companion.modules.trigger import TriggerEngine
 from companion.modules.mbti import MBTIAdapter
 from companion.modules.scene import SceneLibrary
 from companion.modules.relationship import RelationshipManager
 from companion.modules.liveness import LivenessTracker
-from companion.modules.extras import AnniversaryTracker, HabitTracker, TrendingCache
+from companion.modules.extras import HabitTracker, TrendingCache
+from companion.modules.extras.time_awareness import TimeAwareness
 
 
 class CompanionRegistry:
@@ -65,6 +67,12 @@ class CompanionRegistry:
         return mem
 
     @property
+    def flashback(self) -> FlashbackEngine:
+        return self._get_or_create("flashback", lambda: FlashbackEngine(
+            memory_store=self.memory.fact_store,
+        ))
+
+    @property
     def emotion(self) -> EmotionSystem:
         return self._get_or_create("emotion", lambda: self._create_emotion_system())
 
@@ -114,9 +122,10 @@ class CompanionRegistry:
         ))
 
     @property
-    def anniversary(self) -> AnniversaryTracker:
-        return self._get_or_create("anniversary", lambda: AnniversaryTracker(
-            state_path=f"{self.workspace}/states/anniversaries.json",
+    def time_awareness(self) -> TimeAwareness:
+        """统一时间管理 — 包含时间事件 + 纪念日（合并后的 TemporalManager）"""
+        return self._get_or_create("time_awareness", lambda: TimeAwareness(
+            state_path=f"{self.workspace}/states/temporal_events.json",
         ))
 
     @property

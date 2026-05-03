@@ -8,8 +8,10 @@ from .tools import (
     CompanionMemoryTool,
     CompanionSceneTool,
     CompanionStateTool,
+    CompanionTimeTool,
     CompanionTrendingTool,
     CompanionTriggerTool,
+    CompanionFlashbackTool,
 )
 
 __all__ = [
@@ -21,6 +23,8 @@ __all__ = [
     "CompanionFeishuTool",
     "CompanionSceneTool",
     "CompanionTrendingTool",
+    "CompanionTimeTool",
+    "CompanionFlashbackTool",
     "load_persona",
     "build_system_prompt",
 ]

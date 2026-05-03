@@ -74,6 +74,8 @@ def build_companion_agent(
         CompanionFeishuTool,
         CompanionSceneTool,
         CompanionTrendingTool,
+        CompanionTimeTool,
+        CompanionFlashbackTool,
     )
     from companion.agent.persona import load_persona, build_system_prompt
     from companion.token_tracker import token_tracker
@@ -132,6 +134,8 @@ def build_companion_agent(
         CompanionMBTITool(registry),
         CompanionSceneTool(registry),
         CompanionTrendingTool(registry),
+        CompanionTimeTool(registry),
+        CompanionFlashbackTool(registry),
     ]
 
     # 飞书 Tool — 仅在有凭据时注册
@@ -139,6 +143,11 @@ def build_companion_agent(
     feishu_secret = os.environ.get("FEISHU_APP_SECRET", "")
     if feishu_id and feishu_secret:
         tools.append(CompanionFeishuTool(feishu_app_id=feishu_id, feishu_app_secret=feishu_secret))
+
+    # 插件 Tool — 从 companion/plugins/ 加载外部扩展
+    from companion.plugins import load_plugin_tools
+    plugin_tools = load_plugin_tools(registry)
+    tools.extend(plugin_tools)
 
     # 5. 创建 Agent — 包装 generate 以记录 token
     original_generate = llm.generate

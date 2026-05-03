@@ -475,3 +475,106 @@ class CompanionTrendingTool(Tool):
             return ToolResult(success=True, content=f"热点话题: {topic}")
         except Exception as e:
             return ToolResult(success=False, content="", error=f"获取热点话题失败: {e}")
+
+
+class CompanionTimeTool(Tool):
+    """时间事件查询/标记工具。"""
+
+    def __init__(self, registry: CompanionRegistry):
+        self._registry = registry
+
+    @property
+    def name(self) -> str:
+        return "companion_time"
+
+    @property
+    def description(self) -> str:
+        return (
+            "查询待跟进的时间事件（用户提到的未来计划/安排），或标记某个事件已完成。"
+            "在需要跟进用户提到的时间相关话题时调用。"
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["pending", "done"],
+                    "description": "操作类型：pending=查看待事件，done=标记完成(需提供event_id)",
+                },
+                "event_id": {
+                    "type": "string",
+                    "description": "事件ID (action=done 时必需)",
+                },
+            },
+            "required": ["action"],
+        }
+
+    async def execute(self, action: str, event_id: str = "") -> ToolResult:
+        try:
+            r = self._registry
+            if action == "pending":
+                events = r.time_awareness.get_pending()
+                if not events:
+                    return ToolResult(success=True, content="暂无待跟进的时间事件")
+                lines = []
+                for ev in events:
+                    lines.append(f"- [{ev.id}] {ev.original_text}: {ev.content}")
+                return ToolResult(success=True, content="待跟进事件:\n" + "\n".join(lines))
+            elif action == "done":
+                if not event_id:
+                    return ToolResult(success=False, content="", error="done 操作需要提供 event_id")
+                if r.time_awareness.mark_done(event_id):
+                    return ToolResult(success=True, content="事件已标记为完成")
+                return ToolResult(success=False, content="", error=f"未找到事件: {event_id}")
+            else:
+                return ToolResult(success=False, content="", error=f"未知动作: {action}")
+        except Exception as e:
+            return ToolResult(success=False, content="", error=f"时间事件操作失败: {e}")
+
+
+class CompanionFlashbackTool(Tool):
+    """记忆闪回工具 — 自然提起旧话题，增加活人感。"""
+
+    def __init__(self, registry: CompanionRegistry):
+        self._registry = registry
+
+    @property
+    def name(self) -> str:
+        return "companion_flashback"
+
+    @property
+    def description(self) -> str:
+        return (
+            "检索与当前对话相关的记忆，生成自然语言的跟进提示（如'上次你提到的xxx，后来怎么样了？'）。"
+            "当你觉得可以在对话中自然提起之前的话题时调用，"
+            "可以增加真实感和活人感。返回 0-3 条闪回提示供你选择是否使用。"
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "current_message": {
+                    "type": "string",
+                    "description": "当前对话内容，用于检索相关记忆",
+                },
+            },
+            "required": ["current_message"],
+        }
+
+    async def execute(self, current_message: str) -> ToolResult:
+        try:
+            r = self._registry
+            flashbacks = r.flashback.get_flashback(current_message, top_k=3)
+            if not flashbacks:
+                return ToolResult(success=True, content="当前对话没有相关记忆，无需提起旧话题")
+            lines = []
+            for i, fb in enumerate(flashbacks, 1):
+                lines.append(f"{i}. {fb.follow_up_prompt}")
+            return ToolResult(success=True, content="以下旧话题可以自然提起:\n" + "\n".join(lines))
+        except Exception as e:
+            return ToolResult(success=False, content="", error=f"闪回检索失败: {e}")

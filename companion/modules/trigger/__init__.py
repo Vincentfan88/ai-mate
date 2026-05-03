@@ -39,17 +39,16 @@ class TriggerEngine:
 
     决策流程:
     1. HardFilter (安静时段)
-    2. Cooling (AI 最后发言后 30 分钟内不主动)
-    3. ConnectionAxis (思念积累) + PrideAxis (用户主动频率)
-    4. connection >= effective_threshold 则触发
-    5. 触发后 connection 回落 + Cooling 开始
+    2. ConnectionAxis (思念积累) + PrideAxis (用户主动频率)
+    3. connection >= effective_threshold 则触发
+    4. 触发后 connection 回落（connection 自然增长实现间隔）
     """
 
     def __init__(
         self,
         config_path: str = "companion/config/triggers.json",
-        state_path: str = None,
-        quiet_hours: tuple = None,
+        state_path: Optional[str] = None,
+        quiet_hours: Optional[tuple] = None,
     ):
         with open(config_path) as f:
             self.config = json.load(f)
@@ -78,10 +77,6 @@ class TriggerEngine:
             sensitivity=pride_cfg.get("sensitivity", 0.20),
             base_threshold=self.connection_axis.threshold,
         )
-
-        # Cooling
-        cooling_cfg = self.config.get("cooling", {})
-        self.cooldown_minutes = cooling_cfg.get("contact_cooldown_minutes", 30)
 
         # Hard filter
         hf_cfg = self.config["hard_filter"]
@@ -131,29 +126,10 @@ class TriggerEngine:
                 connection=self.connection_axis.get_connection(),
             )
 
-        # 2. Cooling check
-        last_contact = self.connection_axis._last_contact_at
-        if last_contact:
-            elapsed_minutes = (now - last_contact).total_seconds() / 60.0
-            if elapsed_minutes < self.cooldown_minutes:
-                connection = self.connection_axis.tick(now=now, quiet_hours=self._quiet_hours())
-                logger.debug(
-                    f"Cooldown: {elapsed_minutes:.0f}/{self.cooldown_minutes}min, "
-                    f"connection={connection:.3f}"
-                )
-                return TriggerDecision(
-                    should_trigger=False,
-                    pull="",
-                    hold_back=f"刚联系过不久，再等一会儿",
-                    nudge="cooldown",
-                    state=self.hmm.current_state,
-                    connection=connection,
-                )
-
-        # 3. HMM state
+        # 2. HMM state
         state = self.hmm.transition(now=now)
 
-        # 4. Connection axis — 积温增长（安静时段减速）
+        # 3. Connection axis — 积温增长（安静时段减速）
         connection = self.connection_axis.tick(now=now, quiet_hours=self._quiet_hours())
 
         # 5. Pride-based effective threshold
@@ -166,6 +142,10 @@ class TriggerEngine:
         if should_trigger:
             self.connection_axis.on_contact(now)
             connection = self.connection_axis.get_connection()
+            logger.info(
+                f"[Trigger] FIRE: connection={connection:.3f} >= {effective_threshold:.3f} "
+                f"(pride={self.pride_axis.get_pride(now):.3f}), state={state}"
+            )
 
         hour = now.hour
 

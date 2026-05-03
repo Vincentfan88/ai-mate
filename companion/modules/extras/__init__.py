@@ -1,13 +1,16 @@
 """
-Extras 模块 — 时间感知 + 纪念日 + 习惯 + 热搜缓存
+Extras 模块 — 时间上下文 + 习惯 + 热搜缓存
+时间事件 + 纪念日 → 统一使用 companion.modules.extras.time_awareness.TimeAwareness
 """
 
 import json
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
+
+from .time_awareness import TimeAwareness, TimeEvent
 
 
 @dataclass
@@ -51,56 +54,9 @@ def _describe_time(hour: int) -> str:
         return "深夜"
 
 
-class AnniversaryTracker:
-    """纪念日追踪 — 持久化存储 + 自动检查"""
-
-    def __init__(self, start_date: Optional[datetime] = None,
-                 state_path: str = "workspace/companion/anniversaries.json"):
-        self.start_date = start_date or datetime.now()
-        self.state_path = Path(state_path)
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.anniversaries: Dict[str, dict] = {}
-        self._load_state()
-
-    def _load_state(self):
-        """从文件加载纪念日"""
-        if self.state_path.exists():
-            try:
-                data = json.loads(self.state_path.read_text())
-                if data.get("start_date"):
-                    self.start_date = datetime.fromisoformat(data["start_date"])
-                for name, info in data.get("anniversaries", {}).items():
-                    self.anniversaries[name] = info
-            except Exception:
-                pass
-
-    def _save_state(self):
-        """保存纪念日到文件"""
-        data = {
-            "start_date": self.start_date.isoformat(),
-            "anniversaries": self.anniversaries,
-        }
-        self.state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
-
-    def add_anniversary(self, name: str, date: datetime, recurrence: str = "yearly"):
-        self.anniversaries[name] = {"date": date.isoformat(), "recurrence": recurrence}
-        self._save_state()
-
-    def check_today(self, now: Optional[datetime] = None) -> List[str]:
-        """检查今天是否是某个纪念日"""
-        now = now or datetime.now()
-        today_str = now.strftime("%m-%d")
-        hits = []
-        for name, info in self.anniversaries.items():
-            ann_date = datetime.fromisoformat(info["date"])
-            if ann_date.strftime("%m-%d") == today_str:
-                years = now.year - ann_date.year
-                hits.append(f"{name} {years} 周年")
-        return hits
-
-    def days_since_start(self, now: Optional[datetime] = None) -> int:
-        now = now or datetime.now()
-        return (now - self.start_date).days
+# AnniversaryTracker 已合并到 TimeAwareness，保留别名以兼容旧代码
+# 实际使用: registry.time_awareness.add_anniversary() / check_anniversaries_today()
+from .time_awareness import TimeAwareness as AnniversaryTracker  # noqa: F401
 
 
 class HabitTracker:

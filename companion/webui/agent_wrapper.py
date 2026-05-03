@@ -1,9 +1,9 @@
 """Agent 包装器 — 隐藏 Mini-Agent 的内部输出，只保留最终回复。"""
 import io
 import logging
-import sys
 import contextlib
-from datetime import datetime
+
+logger = logging.getLogger("companion")
 
 
 class SilentAgentWrapper:
@@ -38,8 +38,17 @@ class SilentAgentWrapper:
         with contextlib.redirect_stdout(buf):
             result = await self._agent.run()
 
-        if not result or result.startswith("LLM call failed"):
-            return result or "(empty response)"
+        if not result:
+            # 记录详细原因便于排查
+            if result is None:
+                logger.warning("[AgentWrapper] agent.run() returned None")
+            else:
+                logger.warning(f"[AgentWrapper] agent.run() returned empty string")
+            return "(empty response)"
+
+        if result.startswith("LLM call failed") or result.startswith("Task couldn't be completed"):
+            logger.warning(f"[AgentWrapper] agent error: {result[:80]}")
+            return "(empty response)"
 
         # 记录 AI 回复到对话日志
         if self._registry:

@@ -250,10 +250,13 @@ class PreferenceInfer:
                         llm_client.generate(messages), loop
                     ).result(timeout=30)
                 except RuntimeError:
-                    # No running loop — safe to create a new one
-                    response = asyncio.new_event_loop().run_until_complete(
-                        llm_client.generate(messages)
-                    )
+                    # No running loop — create and properly close one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        response = loop.run_until_complete(llm_client.generate(messages))
+                    finally:
+                        loop.close()
                 text = response.content if hasattr(response, "content") else str(response)
             elif hasattr(llm_client, "chat"):
                 text = llm_client.chat([{"role": "user", "content": prompt}])

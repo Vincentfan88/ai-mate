@@ -72,12 +72,48 @@ class ProactiveLoop:
 
     async def _check_trigger(self):
         """检查是否应该触发主动联系"""
-        # 检查纪念日（高优先级）
+        now = datetime.now()
+
+        # ── 预检查：最近 30 分钟内有用户对话则不主动联系 ──
+        try:
+            recent = self.registry.memory.get_recent_interactions(limit=10)
+            for ix in recent:
+                ts = ix.get("timestamp", "")
+                if ts:
+                    try:
+                        dt = datetime.fromisoformat(ts)
+                        if (now - dt).total_seconds() < 1800:
+                            logger.debug(f"Proactive: skipped — user interacted {int((now-dt).total_seconds()/60)}min ago")
+                            return
+                    except (ValueError, TypeError):
+                        pass
+        except Exception as e:
+            logger.debug(f"Proactive pre-check skipped: {e}")
+
+        # 检查到期时间事件（高优先级）
+        try:
+            due_events = self.registry.time_awareness.check_pending(now=now)
+            if due_events:
+                event_descs = [f"{ev.original_text}: {ev.content}" for ev in due_events]
+                event = {
+                    "type": "time_event_trigger",
+                    "events": event_descs,
+                    "timestamp": now.isoformat(),
+                }
+                if asyncio.iscoroutinefunction(self.on_trigger):
+                    await self.on_trigger(event)
+                else:
+                    self.on_trigger(event)
+                return
+        except Exception as e:
+            logger.debug(f"Time event check skipped: {e}")
+
+        # 检查纪念日（高优先级）— 使用统一 time_awareness
         anniversary_hits = []
         try:
-            anniversary_hits = self.registry.anniversary.check_today()
-        except Exception:
-            pass
+            anniversary_hits = self.registry.time_awareness.check_anniversaries_today(now=now)
+        except Exception as e:
+            logger.debug(f"Anniversary check skipped: {e}")
 
         if anniversary_hits:
             event = {
@@ -97,8 +133,8 @@ class ProactiveLoop:
         try:
             daily_emoji = self.registry.habits.get_daily_emoji()
             catchphrase = self.registry.habits.get_catchphrase()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Habit check skipped: {e}")
 
         decision = self.registry.trigger.compute()
         if decision.should_trigger and self.on_trigger:
@@ -134,14 +170,23 @@ class WebhookListener:
     async def handle_message(self, message: dict):
         """处理外部传入的消息"""
         # Enrich with context
-        message["received_at"] = datetime.now().isoformat()
+        message["received_at"] = datetime.now()
 
         # Record interaction (new API)
         self.registry.memory.add_conversation(
             role="user",
             content=message.get("content", ""),
-            timestamp=message["received_at"],
+            timestamp=message["received_at"].isoformat(),
         )
+
+        # Extract time events from user message
+        try:
+            self.registry.time_awareness.extract_from_message(
+                message.get("content", ""),
+                now=message["received_at"],
+            )
+        except Exception:
+            pass  # Time extraction is optional
 
         # Update HMM state
         self.registry.trigger.hmm.on_user_message()
@@ -151,15 +196,21 @@ class WebhookListener:
 
 
 class TrendingFetcher:
-    """热搜预取器 — 定时抓取并缓存热点"""
+    """热搜预取器 — 定时用 LLM 生成热点话题"""
 
     def __init__(
         self,
         registry: CompanionRegistry,
         fetch_interval: int = 14400,  # 4 hours
+        api_key: str = "",
+        api_base: str = "",
+        model: str = "",
     ):
         self.registry = registry
         self.fetch_interval = fetch_interval
+        self.api_key = api_key
+        self.api_base = api_base
+        self.model = model
         self._running = False
 
     async def run(self):
@@ -174,7 +225,58 @@ class TrendingFetcher:
                 await asyncio.sleep(self.fetch_interval)
 
     async def _fetch(self):
-        """执行预取 — 百度热搜"""
+        """执行预取 — 百度热搜优先，LLM 兜底"""
+        # ── Path 1: 百度热搜（真实热点） ──
+        result = await self._fetch_baidu()
+        if result:
+            return
+
+        # ── Path 2: LLM API 兜底生成 ──
+        if self.api_key and self.api_base:
+            result = await self._fetch_llm()
+            if result:
+                return
+
+        logger.warning("Trending: all fetch paths failed")
+
+    async def _fetch_llm(self) -> bool:
+        """通过 LLM API生成热点话题"""
+        today = datetime.now().strftime("%Y年%m月%d日")
+        system_prompt = (
+            "你是一个了解中国时事的助手。请根据当前日期，生成20个当天可能热门的"
+            "社会话题标题（如新闻事件、节日、体育、娱乐等）。"
+            "每行一个话题，不要编号，不要解释。"
+            f"当前日期：{today}"
+        )
+        try:
+            api_url = f"{self.api_base.rstrip('/')}/chat/completions"
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    api_url,
+                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": self.model,
+                        "messages": [{"role": "system", "content": system_prompt}],
+                        "max_tokens": 1000,
+                        "temperature": 0.8,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            topics = [line.strip() for line in content.strip().split("\n") if line.strip()]
+            if topics:
+                result = [{"title": t} for t in topics[:20]]
+                self.registry.trending.save(result)
+                logger.info(f"Trending: fetched {len(result)} topics via LLM")
+                return True
+        except Exception as e:
+            logger.warning(f"Trending: LLM fetch failed: {e}")
+        return False
+
+    async def _fetch_baidu(self) -> bool:
+        """通过百度热搜 fallback"""
         try:
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
                 r = await client.get(
@@ -187,10 +289,10 @@ class TrendingFetcher:
                 result = [{"title": t} for t in topics[:20]]
                 self.registry.trending.save(result)
                 logger.info(f"Trending: fetched {len(result)} topics from Baidu")
-            else:
-                logger.warning("Trending: no topics found")
+                return True
         except Exception as e:
-            logger.error(f"Trending fetcher error: {e}")
+            logger.error(f"Trending: Baidu fetch failed: {e}")
+        return False
 
     def stop(self):
         self._running = False

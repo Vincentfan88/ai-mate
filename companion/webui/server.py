@@ -1,4 +1,4 @@
-"""AI 伴侣 WebUI 服务器 — FastAPI + WebSocket。"""
+"""AI 伙伴 WebUI 服务器 — FastAPI + WebSocket。"""
 
 import asyncio
 import contextlib
@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from companion.cli import build_companion_agent
 from companion.webui.agent_wrapper import SilentAgentWrapper
 from companion.modules.feishu.bot import FeishuBot
+from mini_agent.schema.schema import Message
 
 logger = logging.getLogger("companion")
 
@@ -64,11 +65,24 @@ _agent_ref = None  # (config_hash, SilentAgentWrapper)
 # 飞书 Bot 实例
 _feishu_bot = None
 
-# 配置持久化文件路径 — 仅保存用户设定
+# 配置持久化文件路径 — 保存用户设定
 CONFIG_FILE = Path("workspace/companion/config.json")
 
-# 用户设定字段（可持久化），其余为系统参数不持久化
-_USER_KEYS = {"mbti", "persona", "user_name", "budget", "quiet_hours_blocks", "quiet_hours_start", "quiet_hours_end"}
+# 可持久化的配置字段（前端"保存"时写入 config.json）
+# 注意：这些字段也会从 .env 环境变量加载，config.json 中的值会覆盖 .env 的默认值
+# 敏感密钥（api_key, feishu_app_secret）只从 .env 读取，不写入磁盘
+_USER_KEYS = {
+    # 用户行为设定
+    "mbti", "persona", "user_name", "budget",
+    "quiet_hours_blocks", "quiet_hours_start", "quiet_hours_end",
+    # 飞书 Bot（非敏感配置）
+    "feishu_app_id", "feishu_chat_id", "feishu_enabled",
+    # 本地模型（系统参数但需前端可配）
+    "local_model_enabled", "local_model", "local_api_base",
+    # 模型配置（不含 api_key）
+    "model", "api_base",
+    "cloud_price_in", "cloud_price_out", "price_cache_in",
+}
 
 
 def _load_config() -> None:
@@ -97,8 +111,34 @@ def _save_config() -> None:
     except Exception as e:
         logger.error(f"用户配置保存失败: {e}")
 
-# 主动触发实例
-_proactive_loop = None
+def _inject_conversation_history(agent, registry) -> None:
+    """把最近对话历史加载到 Agent 的 messages 列表中（紧跟系统提示词之后）。
+
+    这样 LLM 每次启动都能知道最近的上下文，不用依赖手动调用记忆工具。
+    """
+    try:
+        recent = registry.memory.get_recent_conversations(limit=20)
+        if not recent:
+            return
+
+        try:
+            ai_name = registry.memory.persona.get("name", "小美")
+        except (AttributeError, KeyError):
+            ai_name = "小美"
+
+        # 插入到系统消息之后（messages[0] 是系统提示词）
+        # 用 system 角色注入，避免被当成对话历史
+        history_lines = ["（以下是你们最近的对话记录，供你参考回忆）"]
+        for entry in recent:
+            if entry["role"] == "assistant":
+                history_lines.append(f"{ai_name}: {entry['content']}")
+            else:
+                history_lines.append(f"对方: {entry['content']}")
+        history_text = "\n".join(history_lines)
+        agent.messages.append(Message(role="system", content=history_text))
+        logger.info(f"已加载 {len(recent)} 条最近对话到 Agent 上下文")
+    except Exception as e:
+        logger.warning(f"加载对话历史失败: {e}")
 
 # WebSocket 连接的客户端集合
 _ws_clients: list = []
@@ -132,6 +172,10 @@ def _get_or_create_agent():
         trigger_quiet_hours=_config.get("quiet_hours_blocks", [[0, 6]]),
     )
     wrapper = SilentAgentWrapper(agent, registry)
+
+    # Agent 启动时加载最近对话历史到 messages（让 LLM 知道上下文）
+    _inject_conversation_history(agent, registry)
+
     _agent_ref = (h, wrapper, persona)
 
     # 注入价格配置到 token_tracker
@@ -215,10 +259,17 @@ def _get_or_create_agent_wrapper() -> SilentAgentWrapper:
 
 async def _ws_broadcast(msg: dict) -> None:
     """向所有 WebSocket 客户端广播消息。"""
+    dead_clients = []
     for client in list(_ws_clients):
         try:
             await client.send_json(msg)
         except Exception:
+            dead_clients.append(client)
+    # 清理已断开的连接
+    for client in dead_clients:
+        try:
+            _ws_clients.remove(client)
+        except ValueError:
             pass
 
 
@@ -226,6 +277,13 @@ async def _on_proactive_trigger(event: dict) -> None:
     """ProactiveLoop 回调 — 生成主动消息并发送。"""
     decision = event["decision"]
     wrapper = _get_or_create_agent()
+
+    # 记录触发决策到日志
+    logger.info(
+        f"[Proactive] trigger={event.get('type', '?')} state={decision['state']} "
+        f"nudge={decision['nudge']} pull={decision['pull'][:30]} "
+        f"connection={decision.get('connection', '?')}"
+    )
 
     # 构造触发上下文提示词
     prompt = (
@@ -236,10 +294,7 @@ async def _on_proactive_trigger(event: dict) -> None:
     )
 
     try:
-        wrapper._agent.add_user_message(prompt)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            response = await wrapper._agent.run()
+        response = await wrapper.run(prompt)
 
         # 获取情绪
         try:
@@ -248,7 +303,7 @@ async def _on_proactive_trigger(event: dict) -> None:
         except Exception:
             current_emotion = ""
 
-        if response and not response.startswith("LLM call failed"):
+        if response and not response.startswith("LLM call failed") and not response.startswith("Task couldn't be completed") and response != "(empty response)":
             # 通过飞书发送
             if _feishu_bot and _feishu_bot.is_connected:
                 default_chat_id = _config.get("feishu_chat_id", "")
@@ -264,10 +319,6 @@ async def _on_proactive_trigger(event: dict) -> None:
             logger.warning(f"[Proactive] LLM 拒绝响应")
     except Exception as e:
         logger.error(f"[Proactive] 主动触发失败: {e}")
-    finally:
-        # 始终清理注入的提示词，防止历史污染
-        if hasattr(wrapper._agent, "_history") and wrapper._agent._history:
-            wrapper._agent._history.pop()
 
 
 # ── FastAPI 应用 ──────────────────────────────────────────────
@@ -290,7 +341,12 @@ async def lifespan(app: FastAPI):
     if registry:
         _proactive_loop = ProactiveLoop(registry, on_trigger=_on_proactive_trigger)
         asyncio.create_task(_proactive_loop.run())
-        fetcher = TrendingFetcher(registry)
+        fetcher = TrendingFetcher(
+            registry,
+            api_key=_config.get("api_key", ""),
+            api_base=_config.get("api_base", ""),
+            model=_config.get("model", ""),
+        )
         asyncio.create_task(fetcher.run())
         logger.info("主动触发循环已启动")
 
@@ -511,7 +567,7 @@ async def generate_persona(body: dict):
             llm_client=llm,
             system_prompt=system_prompt,
             tools={},
-            max_steps=1,
+            max_steps=5,
         )
         agent.add_user_message(f"请根据以下描述生成角色卡：{description}")
         result = await agent.run()
@@ -719,8 +775,10 @@ async def list_personas():
 @app.get("/api/config")
 async def get_config():
     info = _get_persona_info()
+    # 过滤敏感字段，不返回给前端
+    safe_config = {k: v for k, v in _config.items() if k not in ("api_key", "feishu_app_secret")}
     return {
-        **_config,
+        **safe_config,
         **info,
         "has_avatar_ai": _has_avatar("ai"),
         "has_avatar_user": _has_avatar("user"),
@@ -731,12 +789,21 @@ async def get_config():
 @app.post("/api/config")
 async def update_config(body: dict):
     global _config
-    for k in ("mbti", "persona", "model", "api_base", "api_key", "max_steps", "workspace"):
+    for k in ("mbti", "persona", "model", "api_base", "api_key", "workspace"):
         if k in body:
             _config[k] = body[k]
+    # max_steps 必须是正整数
+    if "max_steps" in body:
+        try:
+            _config["max_steps"] = max(1, int(body["max_steps"]))
+        except (TypeError, ValueError):
+            pass
     for k in ("cloud_price_in", "cloud_price_out", "price_cache_in"):
         if k in body:
-            _config[k] = body[k]
+            try:
+                _config[k] = float(body[k])
+            except (TypeError, ValueError):
+                pass
     if "user_name" in body:
         _config["user_name"] = body["user_name"]
     for k in ("local_model_enabled", "local_model", "local_api_base"):
@@ -744,7 +811,10 @@ async def update_config(body: dict):
             _config[k] = body[k]
     for k in ("budget",):
         if k in body:
-            _config[k] = body[k]
+            try:
+                _config[k] = float(body[k])
+            except (TypeError, ValueError):
+                pass
     # 免打扰时段：前端发送 quiet_hours_blocks = [[start, end], ...]
     if "quiet_hours_blocks" in body:
         blocks = body["quiet_hours_blocks"]
@@ -831,6 +901,41 @@ async def token_reset():
     return {"status": "ok"}
 
 
+# ── 日记 ──────────────────────────────────────────────────────
+
+@app.get("/api/diary")
+async def diary_list(limit: int = 30, date: str = ""):
+    """获取日记列表或单篇。
+
+    - `?date=2026-05-03` → 返回指定日期的单篇
+    - `?limit=30` → 返回最近 N 篇（默认30）
+    """
+    persona_name = _config.get("persona", "default")
+    diary_file = Path("workspace/companion") / persona_name / "diary" / "entries.json"
+
+    if not diary_file.exists():
+        return {"entries": [], "total": 0}
+
+    try:
+        data = json.loads(diary_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取日记失败: {e}")
+
+    # 按日期倒序排列
+    data.sort(key=lambda e: e.get("date", ""), reverse=True)
+
+    if date:
+        # 单篇查询
+        for entry in data:
+            if entry.get("date") == date:
+                return {"entry": entry}
+        raise HTTPException(status_code=404, detail=f"未找到 {date} 的日记")
+
+    # 列表查询
+    entries = data[:limit]
+    return {"entries": entries, "total": len(data)}
+
+
 # WebSocket — 对话
 @app.websocket("/ws/chat")
 async def websocket_chat(ws: WebSocket):
@@ -860,7 +965,12 @@ async def websocket_chat(ws: WebSocket):
                         current_emotion = ""
 
                 response = await wrapper.run(user_text)
-                if response and not response.startswith("LLM call failed"):
+                if response and not response.startswith("LLM call failed") and not response.startswith("Task couldn't be completed"):
+                    # AI 回复后设置 connection 冷却，防止短时间内再次主动触发
+                    try:
+                        wrapper.registry.trigger.connection_axis.on_contact()
+                    except Exception as e:
+                        logger.warning(f"Connection cooldown failed: {e}")
                     await ws.send_json({"type": "message", "content": response, "emotion": current_emotion})
                 else:
                     await ws.send_json({"type": "error", "content": "抱歉，我出神了没听清… 能再说一遍吗？"})
