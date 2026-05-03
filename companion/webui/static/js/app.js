@@ -11,7 +11,6 @@ let currentHmmState = '';  // HMM state for status bar
 // ── DOM refs ──
 const $ = (s) => document.querySelector(s);
 const chatView = document.getElementById('chatView');
-const diaryView = document.getElementById('diaryView');
 const settingsView = document.getElementById('settingsView');
 const aboutView = document.getElementById('aboutView');
 const msgContainer = document.getElementById('messages');
@@ -57,13 +56,8 @@ function closeSidebar() {
 function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   chatView.classList.toggle('hidden', view !== 'chat');
-  if (diaryView) diaryView.classList.toggle('active', view === 'diary');
   settingsView.classList.toggle('active', view === 'settings');
   aboutView.classList.toggle('active', view === 'about');
-
-  if (view === 'diary') {
-    loadDiary();
-  }
 
   if (view === 'settings') {
     loadSettingsForm();
@@ -997,88 +991,6 @@ async function deletePersona() {
     }
   } catch (e) {
     showToast('❌ ' + e.message);
-  }
-}
-
-// ── Diary ──
-
-async function loadDiary() {
-  const list = document.getElementById('diaryList');
-  const detailPanel = document.getElementById('diaryDetailPanel');
-  detailPanel.innerHTML = '<div class="diary-detail-empty"><p>← 选择一篇日记查看</p></div>';
-  list.innerHTML = '<div class="diary-loading">加载中…</div>';
-
-  try {
-    const res = await fetch('/api/diary?limit=50');
-    const data = await res.json();
-
-    if (!data.entries || data.entries.length === 0) {
-      list.innerHTML = `
-        <div class="diary-empty">
-          <div class="diary-empty-icon">✨</div>
-          <p>还没有日记记录</p>
-          <p style="font-size:13px;margin-top:8px">AI 会在日常互动中写下感受</p>
-        </div>`;
-      document.getElementById('diaryCount').textContent = '';
-      return;
-    }
-
-    document.getElementById('diaryCount').textContent = `${data.total} 篇`;
-    list.innerHTML = data.entries.map(entry => `
-      <div class="diary-entry" data-date="${entry.date}" onclick="openDiaryDetail('${entry.date}', this)">
-        <div>
-          <span class="diary-entry-date">${formatDiaryDate(entry.date)}</span>
-          ${entry.mood ? `<span class="diary-entry-mood">${entry.mood}</span>` : ''}
-        </div>
-        <div class="diary-entry-preview">${escapeHtml(entry.content)}</div>
-      </div>
-    `).join('');
-  } catch (e) {
-    list.innerHTML = `<div class="diary-empty"><p>加载失败：${escapeHtml(e.message)}</p></div>`;
-  }
-}
-
-function formatDiaryDate(dateStr) {
-  try {
-    const d = new Date(dateStr);
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
-  } catch {
-    return dateStr;
-  }
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-async function openDiaryDetail(date, el) {
-  // Highlight selected entry
-  document.querySelectorAll('.diary-entry').forEach(e => e.classList.remove('selected'));
-  if (el) el.classList.add('selected');
-
-  const detailPanel = document.getElementById('diaryDetailPanel');
-  detailPanel.innerHTML = '<div class="diary-loading" style="padding:40px 0;text-align:center;color:var(--text-muted)">加载中…</div>';
-
-  try {
-    const res = await fetch(`/api/diary?date=${encodeURIComponent(date)}`);
-    if (!res.ok) {
-      detailPanel.innerHTML = '<div class="diary-detail-empty"><p>未找到该日期的日记</p></div>';
-      return;
-    }
-    const data = await res.json();
-    const entry = data.entry;
-    detailPanel.innerHTML = `
-      <div class="diary-detail-card">
-        <div class="diary-detail-date">${formatDiaryDate(entry.date)}</div>
-        ${entry.mood ? `<div class="diary-detail-mood">心情：${escapeHtml(entry.mood)}</div>` : ''}
-        <div class="diary-detail-text">${escapeHtml(entry.content)}</div>
-      </div>
-    `;
-  } catch (e) {
-    detailPanel.innerHTML = `<div class="diary-detail-empty"><p>加载失败：${escapeHtml(e.message)}</p></div>`;
   }
 }
 

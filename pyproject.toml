@@ -1,13 +1,13 @@
 [project]
-name = "mini-agent"
-version = "0.1.0"
-description = "Minimal single agent demo with basic file tools and MCP support"
+name = "ai-mate"
+version = "2.0.0"
+description = "AI mate system with liveness scoring, MBTI personalities, emotion, and proactive conversation triggers"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "Mini Agent Team"}
+    {name = "Vincent Fan"}
 ]
-license = {text = "MIT"}
+license = {text = "AGPL-3.0"}
 dependencies = [
     "pydantic>=2.0.0",
     "pyyaml>=6.0.0",
@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.scripts]
-mini-agent = "mini_agent.cli:main"
-mini-agent-acp = "mini_agent.acp.server:main"
+ai-mate = "companion.cli:main"
+ai-mate-webui = "uvicorn.companion.webui.server:main"
 
 [project.optional-dependencies]
 dev = [

@@ -33,9 +33,11 @@ env/
 *.swo
 *~
 
-# Workspace
+# Mobile (excluded from open-source release)
+companion/mobile/
 workspace/
 *.log
+local.properties
 
 # OS
 .DS_Store

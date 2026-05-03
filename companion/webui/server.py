@@ -65,6 +65,9 @@ _agent_ref = None  # (config_hash, SilentAgentWrapper)
 # 飞书 Bot 实例
 _feishu_bot = None
 
+# 主动触发循环
+_proactive_loop = None
+
 # 配置持久化文件路径 — 保存用户设定
 CONFIG_FILE = Path("workspace/companion/config.json")
 
@@ -918,42 +921,6 @@ async def token_reset():
     from companion.token_tracker import token_tracker
     token_tracker.reset()
     return {"status": "ok"}
-
-
-# ── 日记 ──────────────────────────────────────────────────────
-
-@app.get("/api/diary")
-async def diary_list(limit: int = 30, date: str = ""):
-    """获取日记列表或单篇。
-
-    - `?date=2026-05-03` → 返回指定日期的单篇
-    - `?limit=30` → 返回最近 N 篇（默认30）
-    """
-    persona_name = _config.get("persona", "default")
-    diary_file = Path("workspace/companion") / persona_name / "diary" / "entries.json"
-
-    if not diary_file.exists():
-        return {"entries": [], "total": 0}
-
-    try:
-        data = json.loads(diary_file.read_text(encoding="utf-8"))
-    except Exception as e:
-        logger.error(f"[Diary] 读取失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="读取日记失败，请稍后重试")
-
-    # 按日期倒序排列
-    data.sort(key=lambda e: e.get("date", ""), reverse=True)
-
-    if date:
-        # 单篇查询
-        for entry in data:
-            if entry.get("date") == date:
-                return {"entry": entry}
-        raise HTTPException(status_code=404, detail=f"未找到 {date} 的日记")
-
-    # 列表查询
-    entries = data[:limit]
-    return {"entries": entries, "total": len(data)}
 
 
 # WebSocket — 对话
