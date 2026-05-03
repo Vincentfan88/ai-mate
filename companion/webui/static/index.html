@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 伴侣</title>
+  <title>AI 伙伴</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -17,8 +17,7 @@
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <h1>AI 伴侣</h1>
-        <div class="subtitle">v2.0 · 暖暮配色</div>
+        <h1>AI 伙伴 <span class="subtitle">v1.0</span></h1>
       </div>
       <nav class="sidebar-nav">
         <button class="nav-item active" data-view="chat" onclick="switchView('chat')">
@@ -46,7 +45,7 @@
         <div class="welcome-screen" id="welcomeScreen">
           <div class="welcome-icon">🌙</div>
           <h2 id="welcomeTitle">你好呀</h2>
-          <p id="welcomeText">我是你的 AI 伴侣，有活人感的那种。想聊什么都可以～</p>
+          <p id="welcomeText">我是你的 AI 伙伴，有活人感的那种。想聊什么都可以～</p>
           <div class="welcome-suggestions">
             <button class="suggestion-btn" onclick="sendSuggestion('今天过得怎么样？')">今天过得怎么样？</button>
             <button class="suggestion-btn" onclick="sendSuggestion('给我讲个有趣的事吧')">给我讲个有趣的事吧</button>
@@ -81,69 +80,70 @@
 
           <!-- AI 人物设定 -->
           <div class="tab-content active" id="tabPersona">
-            <div class="setting-group">
-              <label>人格</label>
-              <div class="persona-select-row">
-                <select id="selPersona"></select>
-                <button class="btn-danger btn-sm" id="deletePersonaBtn" onclick="deletePersona()" title="删除当前角色">删除</button>
-              </div>
-              <div class="hint">选择 AI 伴侣的人格设定</div>
-            </div>
-            <div class="setting-divider"></div>
-            <!-- 智能创建角色 -->
-            <div class="setting-group">
-              <label>✨ 智能创建角色</label>
-              <textarea id="inputPersonaDesc" rows="3" placeholder="用自然语言描述你想要的角色，例如：一个温柔体贴的学姐，喜欢读书和烘焙，说话轻声细语..."></textarea>
-              <button class="btn-primary" id="generatePersonaBtn" onclick="generatePersona()">✨ 智能生成</button>
-              <div class="hint">AI 会根据你的描述自动生成角色卡</div>
-            </div>
-            <div class="setting-divider"></div>
-            <div class="setting-group">
-              <label>MBTI 类型</label>
-              <select id="selMbti">
-                <option value="ENFP">ENFP 自由者</option>
-                <option value="INFP">INFP 理想者</option>
-                <option value="ENTP">ENTP 辩论家</option>
-                <option value="INTP">INTP 思考者</option>
-                <option value="ENFJ">ENFJ 主人公</option>
-                <option value="INFJ">INFJ 倡导者</option>
-                <option value="ENTJ">ENTJ 指挥官</option>
-                <option value="INTJ">INTJ 策划者</option>
-                <option value="ESFP">ESFP 表演者</option>
-                <option value="ISFP">ISFP 探险家</option>
-                <option value="ESTP">ESTP 创业者</option>
-                <option value="ISTP">ISTP 巧匠</option>
-                <option value="ESFJ">ESFJ 照顾者</option>
-                <option value="ISFJ">ISFJ 守护者</option>
-                <option value="ESTJ">ESTJ 管家</option>
-                <option value="ISTJ">ISTJ 物流师</option>
-              </select>
-              <div class="hint">影响沟通风格和情绪表达（共 16 种）</div>
-            </div>
-            <div class="setting-divider"></div>
-            <div class="setting-group">
-              <label>AI 头像</label>
-              <div class="avatar-row">
-                <div class="avatar-preview" id="aiAvatarPreview">
-                  <span class="avatar-placeholder">🤖</span>
+            <div class="tab-persona-grid">
+              <div class="tab-persona-left">
+                <div class="setting-group">
+                  <label>人格</label>
+                  <div class="persona-select-row">
+                    <select id="selPersona"></select>
+                    <button class="btn-danger btn-sm" id="deletePersonaBtn" onclick="deletePersona()">删除</button>
+                  </div>
+                  <div class="hint">选择 AI 伙伴的人格设定</div>
                 </div>
-                <div class="avatar-actions">
-                  <input type="file" id="aiAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('ai', this)">
-                  <button class="btn-secondary" onclick="document.getElementById('aiAvatarInput').click()">上传</button>
-                  <button class="btn-secondary btn-danger" id="aiAvatarDeleteBtn" onclick="deleteAvatar('ai')" style="display:none">删除</button>
+                <div class="setting-group">
+                  <label>AI 头像</label>
+                  <div class="avatar-row">
+                    <div class="avatar-preview" id="aiAvatarPreview">
+                      <span class="avatar-placeholder">✨</span>
+                    </div>
+                    <div class="avatar-actions">
+                      <input type="file" id="aiAvatarInput" accept="image/*" class="file-input-hidden" onchange="uploadAvatar('ai', this)">
+                      <button class="btn-secondary" onclick="document.getElementById('aiAvatarInput').click()">上传</button>
+                      <button class="btn-secondary btn-danger" id="aiAvatarDeleteBtn" onclick="deleteAvatar('ai')" style="display:none">删除</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="setting-group">
+                  <label>MBTI 类型</label>
+                  <select id="selMbti">
+                    <option value="ENFP">ENFP 自由者</option>
+                    <option value="INFP">INFP 理想者</option>
+                    <option value="ENTP">ENTP 辩论家</option>
+                    <option value="INTP">INTP 思考者</option>
+                    <option value="ENFJ">ENFJ 主人公</option>
+                    <option value="INFJ">INFJ 倡导者</option>
+                    <option value="ENTJ">ENTJ 指挥官</option>
+                    <option value="INTJ">INTJ 策划者</option>
+                    <option value="ESFP">ESFP 表演者</option>
+                    <option value="ISFP">ISFP 探险家</option>
+                    <option value="ESTP">ESTP 创业者</option>
+                    <option value="ISTP">ISTP 巧匠</option>
+                    <option value="ESFJ">ESFJ 照顾者</option>
+                    <option value="ISFJ">ISFJ 守护者</option>
+                    <option value="ESTJ">ESTJ 管家</option>
+                    <option value="ISTJ">ISTJ 物流师</option>
+                  </select>
+                  <div class="hint">影响沟通风格和情绪表达（共 16 种）</div>
+                </div>
+                <div class="setting-group">
+                  <label>角色卡导入</label>
+                  <div class="file-upload-row">
+                    <input type="file" id="fileInput" accept=".png,.json" class="file-input-hidden">
+                    <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">选择文件</button>
+                    <span class="file-name" id="fileName">未选择文件</span>
+                  </div>
+                  <button class="btn-primary" id="importBtn" onclick="importCharacter()" disabled>导入角色卡</button>
+                  <div class="hint">支持酒馆标准角色卡（.png / .json）</div>
                 </div>
               </div>
-            </div>
-            <div class="setting-divider"></div>
-            <div class="setting-group">
-              <label>角色卡导入</label>
-              <div class="file-upload-row">
-                <input type="file" id="fileInput" accept=".png,.json" class="file-input-hidden">
-                <button class="btn-secondary" onclick="document.getElementById('fileInput').click()">选择文件</button>
-                <span class="file-name" id="fileName">未选择文件</span>
+              <div class="tab-persona-right">
+                <div class="smart-create-card">
+                  <label class="smart-create-label">智能创建角色</label>
+                  <textarea id="inputPersonaDesc" placeholder="用自然语言描述你想要的角色，例如：一个温柔体贴的学姐，喜欢读书和烘焙，说话轻声细语..."></textarea>
+                  <button class="btn-primary" id="generatePersonaBtn" onclick="generatePersona()">智能生成</button>
+                  <div class="hint">AI 会根据你的描述自动生成角色卡</div>
+                </div>
               </div>
-              <button class="btn-primary" id="importBtn" onclick="importCharacter()" disabled>导入角色卡</button>
-              <div class="hint">支持酒馆标准角色卡（.png / .json）</div>
             </div>
           </div>
 
@@ -246,7 +246,7 @@
                   <span class="toggle-slider"></span>
                 </label>
               </div>
-              <div class="hint">通过飞书长连接与 AI 伴侣对话</div>
+              <div class="hint">通过飞书长连接与 AI 伙伴对话</div>
             </div>
             <div class="setting-group">
               <label>App ID</label>
@@ -333,21 +333,19 @@
         </div>
         <div class="settings-body about-body">
           <div class="about-section">
-            <h3>AI 伴侣 v2.0</h3>
-            <p>基于 Mini-Agent 框架的端到端 AI 伴侣系统，支持活人感八维度、HMM 状态机、MBTI 人格特化、关系阶段推进等核心能力。</p>
+            <h3>AI 伙伴 v1.0</h3>
+            <p>基于 Mini-Agent 框架的端到端 AI 伙伴系统，支持活人感八维度、HMM 状态机、MBTI 人格特化、关系阶段推进等核心能力。</p>
           </div>
           <div class="about-section">
             <h3>版权声明</h3>
             <p>本项目为个人研究用途，不构成任何形式的产品或服务承诺。所有 AI 生成内容仅供实验参考。</p>
           </div>
           <div class="about-section">
-            <h3>引用的开源项目</h3>
+            <h3>引用/参考的开源项目</h3>
             <ul class="oss-list">
-              <li><strong>Mini-Agent</strong> — 轻量级异步 Agent 框架（521 行）</li>
-              <li><strong>FastAPI</strong> — Python 异步 Web 框架</li>
-              <li><strong>lark-oapi</strong> — 飞书开放平台 Python SDK</li>
-              <li><strong>httpx</strong> — 异步 HTTP 客户端</li>
-              <li><strong>pytest</strong> — Python 测试框架</li>
+              <li><strong>Mini-Agent</strong> — MiniMax.ai 轻量级异步 Agent 框架，提供端到端 Agent 运行底座（MIT，<a href="https://github.com/MiniMax-AI/Mini-Agent" target="_blank">MiniMax-AI/Mini-Agent</a>）</li>
+              <li><strong>Cyberboss</strong> — 微信 Agent Bridge + 时间轴审计/随机轮询唤醒系统，参考其外部监管与主动触发思路（AGPL-3.0，<a href="https://github.com/WenXiaoWendy/cyberboss" target="_blank">WenXiaoWendy/cyberboss</a>）</li>
+              <li><strong>jiwen</strong> — 五轴连续状态（connection/pride/valence/arousal/immersion）驱动的角色主动意识引擎，参考其情绪状态建模思路（<a href="https://github.com/ClaraShafiq/jiwen" target="_blank">ClaraShafiq/jiwen</a>）</li>
             </ul>
           </div>
           <div class="about-section">
