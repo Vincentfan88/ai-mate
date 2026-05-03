@@ -50,7 +50,6 @@ class TestRegistry:
             assert reg.trigger is not None
             assert reg.mbti is not None
             assert reg.scenes is not None
-            assert reg.relationship is not None
             assert reg.liveness is not None
 
     def test_get_module(self):

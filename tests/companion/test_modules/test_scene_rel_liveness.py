@@ -1,7 +1,6 @@
-"""Tests for scene, relationship, and liveness modules."""
+"""Tests for scene and liveness modules."""
 
 from companion.modules.scene import SceneLibrary
-from companion.modules.relationship import RelationshipManager
 from companion.modules.liveness import LivenessTracker, LivenessMetrics
 
 
@@ -22,7 +21,6 @@ class TestSceneLibrary:
         library = SceneLibrary(config_path="companion/config/scenes.json")
         scenes = library.get_suitable_scenes(hour=8, mood="idle")
         assert len(scenes) > 0
-        # get_suitable_scenes returns List[Tuple[Scene, float]]
         assert any(s.id == "morning_greeting" for s, _score in scenes)
 
     def test_scene_hour_check(self):
@@ -30,63 +28,6 @@ class TestSceneLibrary:
         scene = library.get_scene("morning_greeting")
         assert scene.is_suitable_for_hour(7)
         assert not scene.is_suitable_for_hour(22)
-
-
-class TestRelationshipManager:
-    """Test relationship stage management."""
-
-    def test_load_stages(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        assert len(mgr.stages) == 6
-
-    def test_get_stage(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        stage = mgr.get_stage(0)
-        assert stage.name == "stranger"
-        assert stage.name_cn == "陌生人"
-
-    def test_scene_multiplier(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        # get_scene_multiplier takes only scene_id (uses current level)
-        mult = mgr.get_scene_multiplier("morning_greeting")
-        assert isinstance(mult, float)
-        assert mult > 0
-
-    def test_check_progress_insufficient(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        # Not enough interactions at default state
-        assert mgr.check_progress() is False
-
-    def test_check_progress_sufficient(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        # Reset level and set enough for level 0 → 1 progression
-        mgr.current_level = 0
-        mgr.interaction_count = 50
-        mgr.emotional_depth = 0.5
-        mgr.memory_count = 30
-        assert mgr.check_progress() is True
-
-    def test_max_level_no_progress(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        mgr.current_level = 5
-        assert mgr.check_progress() is False
-
-    def test_progress_advances(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        mgr.interaction_count = 55
-        mgr.emotional_depth = 0.6
-        mgr.memory_count = 35
-        initial_level = mgr.current_level
-        advanced = mgr.progress()
-        if advanced:
-            assert mgr.current_level == initial_level + 1
-
-    def test_get_stats(self):
-        mgr = RelationshipManager(config_path="companion/config/relationship.json")
-        stats = mgr.get_stats()
-        assert "level" in stats
-        assert "interactions" in stats
-        assert "can_progress" in stats
 
 
 class TestLivenessTracker:

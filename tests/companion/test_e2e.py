@@ -86,16 +86,6 @@ class TestEndToEnd:
         assert morning is not None
         assert morning.is_suitable_for_hour(8)
 
-    def test_relationship_progression(self, registry):
-        """Test: enough interactions → can progress to next stage."""
-        # At level 0, need 50 interactions, 0.5 depth, 30 memories for acquaintance
-        rel = registry.relationship
-        rel.current_level = 0  # Reset to level 0 for test
-        rel.interaction_count = 50
-        rel.emotional_depth = 0.5
-        rel.memory_count = 30
-        assert rel.check_progress() is True
-
     def test_all_tools_work(self, registry):
         """Test: all tool adapters return valid responses."""
         tools = [
@@ -278,12 +268,6 @@ class TestEndToEnd:
         phrase = registry.habits.get_catchphrase()
         # May or may not appear (probability-based)
         assert phrase is None or isinstance(phrase, str)
-
-    def test_days_since_start(self, registry):
-        """Test: relationship days calculation."""
-        registry.relationship.current_level = 0
-        days = registry.relationship.get_days_together()
-        assert days >= 0
 
     def test_full_webhook_emotion_trigger_pipeline(self, registry):
         """Test: webhook message → emotion → trigger pipeline."""

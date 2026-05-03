@@ -47,7 +47,6 @@ class CompanionStateTool(Tool):
 
             emotion = r.emotion.get_current_emotion("time_passage")
             ctx = TimeContext.from_now()
-            stage = r.relationship.get_current_stage()
             hours = ctx.hour
 
             liveness_scores = r.liveness.calculate_scores()
@@ -56,13 +55,10 @@ class CompanionStateTool(Tool):
             hmm_state = r.trigger.hmm.current_state if hasattr(r.trigger, "hmm") else "unknown"
             beliefs = r.memory.preference.get_active_beliefs(limit=3)
             belief_texts = [f"- {b.content} ({b.trust_score:.0%})" for b in beliefs] if beliefs else ["暂无"]
-            rel_stats = r.relationship.get_stats()
-            days = r.relationship.get_days_together()
 
             scenes = r.scenes.get_suitable_scenes(
                 hour=hours,
                 mood=hmm_state,
-                relationship_multiplier_fn=r.relationship.get_scene_multiplier,
                 top_k=3,
             )
             scene_texts = [f"- {s.name} (权重: {score})" for s, score in scenes] if scenes else ["暂无合适场景"]
@@ -73,8 +69,6 @@ class CompanionStateTool(Tool):
                 f"时间: {ctx.time_description}",
                 f"HMM 状态: {hmm_state}",
                 f"情绪: {emotion['emotion']} (强度: {emotion['intensity']})",
-                f"关系: {stage.name_cn} (Lv.{stage.level}) — 在一起 {days} 天",
-                f"  互动: {rel_stats['interactions']} 次 | 情绪深度: {rel_stats['emotional_depth']:.2f}",
                 f"活人感: {liveness_overall:.0%}",
                 f"  主动性: {liveness_scores.get('主动性', 0):.0%} | 一致性: {liveness_scores.get('一致性', 0):.0%}",
                 f"  成长性: {liveness_scores.get('成长性', 0):.0%} | 情绪化: {liveness_scores.get('情绪化', 0):.0%}",
@@ -84,7 +78,7 @@ class CompanionStateTool(Tool):
                 f"  风格: {profile.speech.tone_keywords}",
                 "偏好推断:",
                 *belief_texts,
-                "场景 (含关系乘数):",
+                "场景:",
                 *scene_texts,
             ]
             return ToolResult(success=True, content="\n".join(lines))
@@ -346,7 +340,6 @@ class CompanionSceneTool(Tool):
             scenes = r.scenes.get_suitable_scenes(
                 hour=h,
                 mood=mood,
-                relationship_multiplier_fn=r.relationship.get_scene_multiplier,
                 top_k=5,
             )
             if not scenes:

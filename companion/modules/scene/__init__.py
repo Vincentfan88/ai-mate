@@ -1,4 +1,4 @@
-"""场景模块 — 加权匹配（基础权重 × 心境 × 时段 × 关系阶段系数）。"""
+"""场景模块 — 加权匹配（基础权重 × 心境 × 时段过滤）。"""
 
 import json
 import random
@@ -59,7 +59,6 @@ class SceneLibrary:
         self,
         hour: int,
         mood: str,
-        relationship_multiplier_fn=None,  # Callable[[str], float]
         top_k: int = 5,
     ) -> List[Tuple[Scene, float]]:
         """获取加权排序后的场景列表
@@ -75,14 +74,8 @@ class SceneLibrary:
             if not scene.is_suitable_for_mood(mood):
                 continue
 
-            # 2. 加权计算
-            score = scene.base_weight
-
-            # 3. 关系阶段乘数
-            if relationship_multiplier_fn:
-                score *= relationship_multiplier_fn(scene.id)
-
-            scored.append((scene, round(score, 3)))
+            # 2. 使用基础权重
+            scored.append((scene, round(scene.base_weight, 3)))
 
         # 按权重排序
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -92,10 +85,9 @@ class SceneLibrary:
         self,
         hour: int,
         mood: str,
-        relationship_multiplier_fn=None,
     ) -> Optional[Tuple[Scene, float]]:
         """按权重随机选择一个场景（加权采样）"""
-        scored = self.get_suitable_scenes(hour, mood, relationship_multiplier_fn)
+        scored = self.get_suitable_scenes(hour, mood)
         if not scored:
             return None
 

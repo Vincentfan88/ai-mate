@@ -261,11 +261,9 @@ async def run_interactive_session(agent, registry, persona: dict, budget: float 
         elif user_input == "/state":
             emotion = registry.emotion.get_current_emotion("time_passage")
             hmm_state = registry.trigger.hmm.current_state if hasattr(registry.trigger, "hmm") else "unknown"
-            stage = registry.relationship.get_current_stage()
             print(f"\n📊 当前状态")
             print(f"  情绪: {emotion['emotion']} ({emotion['intensity']})")
             print(f"  HMM:  {hmm_state}")
-            print(f"  关系: {stage.name_cn} Lv.{stage.level}")
             continue
         elif user_input == "/save":
             registry.emotion.save_residue()

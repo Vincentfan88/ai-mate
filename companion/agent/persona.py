@@ -146,7 +146,7 @@ def build_system_prompt(persona: dict, user_name: str = "") -> str:
         "你在对话中可以调用以下工具来了解自己的状态和世界：",
         "",
         "### companion_state",
-        "获取你的综合状态——情绪、时间、关系阶段、活人感评分、HMM 状态等。",
+        "获取你的综合状态——情绪、时间、活人感评分、HMM 状态等。",
         "**使用时机**: 在回应前想了解自己当前的状态时调用。",
         "",
         "### companion_memory",

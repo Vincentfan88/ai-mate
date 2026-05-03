@@ -67,7 +67,6 @@ function switchView(view) {
 
   if (view === 'settings') {
     loadSettingsForm();
-    loadRelationship();
     pollFeishuStatus();
     refreshStats();
     if (window._feishuPollTimer) clearInterval(window._feishuPollTimer);
@@ -403,84 +402,6 @@ function removeBlock(index) {
 
 function updateBlock(index, field, value) {
   quietBlocks[index][field] = parseInt(value) || 0;
-}
-
-const REL_STAGES = [
-  '陌生人', '熟人', '朋友', '好朋友', '恋人', '亲密爱人'
-];
-
-async function loadRelationship() {
-  try {
-    const res = await fetch('/api/relationship');
-    const data = await res.json();
-    renderRelationship(data);
-  } catch (e) {
-    document.getElementById('relationshipSection').innerHTML =
-      '<div class="hint">加载失败</div>';
-  }
-}
-
-function renderRelationship(data) {
-  const section = document.getElementById('relationshipSection');
-  const stage = data.stage || 0;
-  const interactions = data.interactions || 0;
-  const isLocked = interactions > 0;
-
-  if (isLocked) {
-    const days = data.days_together || 0;
-    const nextStage = REL_STAGES[stage + 1] || '';
-    const canProgress = data.can_progress;
-    const progressText = nextStage
-      ? `距离「${nextStage}」: ${interactions}/${data.req_interactions || '?'} 次互动`
-      : '已满级';
-    const progressPct = data.req_interactions
-      ? Math.min(100, (interactions / data.req_interactions) * 100)
-      : 100;
-
-    section.innerHTML = `
-      <div class="rel-stage-display">
-        <div class="rel-stage-name">${REL_STAGES[stage]}</div>
-        <div class="rel-stage-meta">
-          <span>互动 ${interactions} 次</span>
-          <span>在一起 ${days} 天</span>
-        </div>
-        ${nextStage ? `<div class="rel-stage-progress">${canProgress ? '✓ 可推进' : progressText}</div>
-        <div class="rel-progress-bar"><div class="rel-progress-fill" style="width:${progressPct}%"></div></div>` : ''}
-        <div class="hint">关系已建立，将自动推进中</div>
-      </div>
-    `;
-  } else {
-    let options = REL_STAGES.map((name, i) =>
-      `<option value="${i}">${name}</option>`
-    ).join('');
-    section.innerHTML = `
-      <div class="rel-stage-select-row">
-        <select id="selRelStage">${options}</select>
-        <button class="btn-secondary btn-sm" onclick="applyRelStage()">设置</button>
-      </div>
-      <div class="hint">设定关系起点，开始互动后将自动推进</div>
-    `;
-  }
-}
-
-async function applyRelStage() {
-  const stage = parseInt(document.getElementById('selRelStage').value);
-  try {
-    const res = await fetch('/api/relationship', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage }),
-    });
-    const data = await res.json();
-    if (data.status === 'ok') {
-      renderRelationship(data);
-      showToast('关系起点已设置为: ' + REL_STAGES[stage]);
-    } else {
-      showToast('设置失败: ' + (data.error || '未知错误'), 'error');
-    }
-  } catch (e) {
-    showToast('网络错误，设置失败', 'error');
-  }
 }
 
 async function loadSettingsForm() {

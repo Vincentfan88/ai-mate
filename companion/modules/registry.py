@@ -9,7 +9,6 @@ from companion.modules.emotion import EmotionSystem
 from companion.modules.trigger import TriggerEngine
 from companion.modules.mbti import MBTIAdapter
 from companion.modules.scene import SceneLibrary
-from companion.modules.relationship import RelationshipManager
 from companion.modules.liveness import LivenessTracker
 from companion.modules.extras import HabitTracker, TrendingCache
 from companion.modules.extras.time_awareness import TimeAwareness
@@ -106,13 +105,6 @@ class CompanionRegistry:
     def scenes(self) -> SceneLibrary:
         return self._get_or_create("scenes", lambda: SceneLibrary(
             config_path=f"{self.config_dir}/scenes.json",
-        ))
-
-    @property
-    def relationship(self) -> RelationshipManager:
-        return self._get_or_create("relationship", lambda: RelationshipManager(
-            config_path=f"{self.config_dir}/relationship.json",
-            state_path=f"{self.workspace}/states/relationship_state.json",
         ))
 
     @property

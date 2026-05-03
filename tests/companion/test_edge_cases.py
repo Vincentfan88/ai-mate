@@ -14,7 +14,6 @@ from companion.modules.registry import CompanionRegistry
 from companion.modules.emotion.core import EmotionSystem
 from companion.modules.trigger.hmm_state_machine import HMMStateMachine, CompanionState
 from companion.modules.trigger import TriggerEngine, TriggerDecision
-from companion.modules.relationship import RelationshipManager
 from companion.modules.liveness import LivenessTracker
 from companion.modules.memory import MemorySystem
 from companion.modules.memory.json_store import JsonFactStore
@@ -170,17 +169,6 @@ class TestPersistenceEdgeCases:
         recent = cache.get_recent(5)
         assert len(recent) == 1
 
-    def test_state_file_corrupted_relationship(self, temp_workspace):
-        """关系状态文件损坏 → 应回退默认值。"""
-        state_path = f"{temp_workspace}/relationship_state.json"
-        Path(state_path).write_text("{invalid")
-        rel = RelationshipManager(
-            config_path="companion/config/relationship.json",
-            state_path=state_path,
-        )
-        assert rel.current_level == 0
-        assert rel.interaction_count == 0
-
     def test_fast_consecutive_writes(self, temp_workspace):
         """快速连续写入不同内容不应崩溃。"""
         store = JsonFactStore(facts_path=f"{temp_workspace}/memory/facts.json")
@@ -315,34 +303,6 @@ class TestModuleBoundaryValues:
         hmm = HMMStateMachine(config, state_path=f"{temp_workspace}/hmm_state.json")
         hmm.on_user_message()
         assert hmm.current_state == CompanionState.ACTIVE
-
-    def test_relationship_extreme_interaction_count(self, temp_workspace):
-        """超大 interaction_count 在最高级不应再推进。"""
-        state_path = f"{temp_workspace}/relationship_state.json"
-        rel = RelationshipManager(
-            config_path="companion/config/relationship.json",
-            state_path=state_path,
-        )
-        rel.interaction_count = 99999
-        rel.emotional_depth = 5.0
-        rel.memory_count = 9999
-        rel.current_level = 5
-        can_progress = rel.check_progress()
-        assert can_progress is False
-
-    def test_relationship_negative_values(self, temp_workspace):
-        """负值输入不应导致崩溃。"""
-        state_path = f"{temp_workspace}/relationship_state.json"
-        rel = RelationshipManager(
-            config_path="companion/config/relationship.json",
-            state_path=state_path,
-        )
-        rel.interaction_count = -1
-        rel.emotional_depth = -1.0
-        rel.memory_count = -1
-        # 不应崩溃
-        _ = rel.check_progress()
-        _ = rel.get_scene_multiplier("morning_greeting")
 
     def test_trigger_computation(self, registry):
         """正常调用不应崩溃。"""
