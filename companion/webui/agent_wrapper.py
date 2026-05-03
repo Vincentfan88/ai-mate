@@ -39,11 +39,7 @@ class SilentAgentWrapper:
             result = await self._agent.run()
 
         if not result:
-            # 记录详细原因便于排查
-            if result is None:
-                logger.warning("[AgentWrapper] agent.run() returned None")
-            else:
-                logger.warning(f"[AgentWrapper] agent.run() returned empty string")
+            logger.warning(f"[AgentWrapper] agent.run() returned {result!r}")
             return "(empty response)"
 
         if result.startswith("LLM call failed") or result.startswith("Task couldn't be completed"):

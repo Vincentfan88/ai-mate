@@ -60,10 +60,11 @@ class TestConnectionAxis:
     def test_normal_growth_outside_quiet(self):
         """Connection should grow at full rate outside quiet hours."""
         with tempfile.TemporaryDirectory() as td:
+            now = datetime.now().replace(hour=15, minute=0)
             axis = ConnectionAxis(state_path=f"{td}/conn.json", growth_rate_per_hour=0.10)
-            axis._initialized_at = datetime.now() - timedelta(hours=10)
+            axis._initialized_at = now - timedelta(hours=10)
             # At 3 PM (not quiet): full growth
-            value = axis.tick(now=datetime.now().replace(hour=15, minute=0), quiet_hours=(0, 6))
+            value = axis.tick(now=now, quiet_hours=(0, 6))
             # 10h * 0.10 = 1.0 (capped), with noise → roughly 0.9-1.0
             assert value >= 0.7
 

@@ -124,7 +124,7 @@ class TokenTracker:
         model: str,
         timestamp: Optional[str] = None,
         cached_tokens: int = 0,
-        price_cache_in: float = None,
+        price_cache_in: Optional[float] = None,
     ) -> TokenEntry:
         """记录一次 LLM 调用的 token 消耗。
 

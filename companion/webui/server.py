@@ -660,7 +660,8 @@ async def upload_avatar(role: str, file: UploadFile = File(...)):
         _avatar_path(role).write_bytes(content)
         return {"status": "ok", "role": role, "has_avatar": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+        logger.error(f"[Avatar] 上传失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="上传失败，请稍后重试")
 
 
 @app.post("/api/save-persona")
@@ -797,13 +798,13 @@ async def update_config(body: dict):
         try:
             _config["max_steps"] = max(1, int(body["max_steps"]))
         except (TypeError, ValueError):
-            pass
+            logger.warning(f"Invalid max_steps value: {body.get('max_steps')}")
     for k in ("cloud_price_in", "cloud_price_out", "price_cache_in"):
         if k in body:
             try:
                 _config[k] = float(body[k])
             except (TypeError, ValueError):
-                pass
+                logger.warning(f"Invalid {k} value: {body.get(k)}")
     if "user_name" in body:
         _config["user_name"] = body["user_name"]
     for k in ("local_model_enabled", "local_model", "local_api_base"):
@@ -814,7 +815,7 @@ async def update_config(body: dict):
             try:
                 _config[k] = float(body[k])
             except (TypeError, ValueError):
-                pass
+                logger.warning(f"Invalid budget value: {body.get('budget')}")
     # 免打扰时段：前端发送 quiet_hours_blocks = [[start, end], ...]
     if "quiet_hours_blocks" in body:
         blocks = body["quiet_hours_blocks"]
@@ -937,7 +938,8 @@ async def diary_list(limit: int = 30, date: str = ""):
     try:
         data = json.loads(diary_file.read_text(encoding="utf-8"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"读取日记失败: {e}")
+        logger.error(f"[Diary] 读取失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="读取日记失败，请稍后重试")
 
     # 按日期倒序排列
     data.sort(key=lambda e: e.get("date", ""), reverse=True)

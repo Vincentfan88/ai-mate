@@ -12,8 +12,8 @@ class MemoryItem:
     timestamp: str
     importance: float = 0.3
     mention_count: int = 1
-    related_keywords: list = None
-    metadata: dict = None
+    related_keywords: Optional[list] = None
+    metadata: Optional[dict] = None
     source: str = "user"
 
     def __post_init__(self):
