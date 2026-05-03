@@ -73,6 +73,13 @@ python -m companion.cli --persona default      # 指定人格
 launchctl start com.ai-mate.webui
 ```
 
+### 开发规划
+
+| 阶段 | 模型方案 | 说明 |
+|------|----------|------|
+| **Phase 1（当前）** | 纯云端 API | 支持 DeepSeek、SiliconFlow、Claude 等任何 OpenAI 兼容 API，开箱即用 |
+| **Phase 2（计划中）** | 本地 4B/7B 微调模型 + 云端混合 | 日常对话使用本地小模型（隐私好、成本低），矛盾检测/偏好推断等高智商场景自动切换云端大模型（COT）。本地模型将用 Phase 1 积累的真实对话数据进行微调，保持说话风格一致 |
+
 ### 架构概览
 
 ```
@@ -176,6 +183,13 @@ python -m companion.cli --persona default      # specify persona
 # launchd service (macOS production deployment)
 launchctl start com.ai-mate.webui
 ```
+
+### Development Roadmap
+
+| Phase | Model Strategy | Description |
+|-------|---------------|-------------|
+| **Phase 1 (current)** | Cloud API only | Works with any OpenAI-compatible API (DeepSeek, SiliconFlow, Claude, etc.) — ready to use out of the box |
+| **Phase 2 (planned)** | Local 4B/7B fine-tuned model + cloud hybrid | Daily conversations run on a local small model (better privacy, lower cost), while complex reasoning tasks like contradiction detection and preference inference automatically route to a cloud large model (COT). The local model will be fine-tuned on real conversation data collected during Phase 1, maintaining a consistent speaking style |
 
 ### Tests
 
