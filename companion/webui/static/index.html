@@ -105,25 +105,32 @@
                 </div>
                 <div class="setting-group">
                   <label>MBTI 类型</label>
-                  <select id="selMbti">
-                    <option value="ENFP">ENFP 自由者</option>
-                    <option value="INFP">INFP 理想者</option>
-                    <option value="ENTP">ENTP 辩论家</option>
-                    <option value="INTP">INTP 思考者</option>
-                    <option value="ENFJ">ENFJ 主人公</option>
-                    <option value="INFJ">INFJ 倡导者</option>
-                    <option value="ENTJ">ENTJ 指挥官</option>
-                    <option value="INTJ">INTJ 策划者</option>
-                    <option value="ESFP">ESFP 表演者</option>
-                    <option value="ISFP">ISFP 探险家</option>
-                    <option value="ESTP">ESTP 创业者</option>
-                    <option value="ISTP">ISTP 巧匠</option>
-                    <option value="ESFJ">ESFJ 照顾者</option>
-                    <option value="ISFJ">ISFJ 守护者</option>
-                    <option value="ESTJ">ESTJ 管家</option>
-                    <option value="ISTJ">ISTJ 物流师</option>
-                  </select>
-                  <div class="hint">影响沟通风格和情绪表达（共 16 种）</div>
+                  <div class="mbti-select-row">
+                    <select id="selMbti">
+                      <option value="ENFP">ENFP 自由者</option>
+                      <option value="INFP">INFP 理想者</option>
+                      <option value="ENTP">ENTP 辩论家</option>
+                      <option value="INTP">INTP 思考者</option>
+                      <option value="ENFJ">ENFJ 主人公</option>
+                      <option value="INFJ">INFJ 倡导者</option>
+                      <option value="ENTJ">ENTJ 指挥官</option>
+                      <option value="INTJ">INTJ 策划者</option>
+                      <option value="ESFP">ESFP 表演者</option>
+                      <option value="ISFP">ISFP 探险家</option>
+                      <option value="ESTP">ESTP 创业者</option>
+                      <option value="ISTP">ISTP 巧匠</option>
+                      <option value="ESFJ">ESFJ 照顾者</option>
+                      <option value="ISFJ">ISFJ 守护者</option>
+                      <option value="ESTJ">ESTJ 管家</option>
+                      <option value="ISTJ">ISTJ 物流师</option>
+                    </select>
+                    <button class="btn-secondary btn-sm" id="applyMbtiBtn" onclick="applyMbti()">切换</button>
+                  </div>
+                  <div class="hint">影响沟通风格和情绪表达（共 16 种，可热切换无需重启）</div>
+                </div>
+                <div class="setting-group">
+                  <label>关系起点</label>
+                  <div id="relationshipSection"></div>
                 </div>
                 <div class="setting-group">
                   <label>角色卡导入</label>

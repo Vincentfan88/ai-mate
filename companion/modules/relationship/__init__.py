@@ -13,7 +13,6 @@ class RelationshipStage:
     level: int
     name: str
     name_cn: str
-    trigger_frequency_hours: float
     expression_intensity: float
     scene_multipliers: Dict[str, float]
     progress_requirements: Optional[dict]
@@ -35,7 +34,6 @@ class RelationshipManager:
                 level=int(level),
                 name=data["name"],
                 name_cn=data["name_cn"],
-                trigger_frequency_hours=data["trigger_frequency_hours"],
                 expression_intensity=data["expression_intensity"],
                 scene_multipliers=data["scene_multipliers"],
                 progress_requirements=data.get("progress_requirements"),

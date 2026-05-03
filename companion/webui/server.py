@@ -851,6 +851,73 @@ async def update_config(body: dict):
     return {"status": "ok", "config": _config}
 
 
+@app.post("/api/mbti")
+async def update_mbti(body: dict):
+    """热切换 MBTI 类型，无需重建 agent，下次消息生效。"""
+    mbti = body.get("mbti", "ENFP")
+    valid_mbti = [
+        "ENFP", "INFP", "ENTP", "INTP", "ENFJ", "INFJ", "ENTJ", "INTJ",
+        "ESFP", "ISFP", "ESTP", "ISTP", "ESFJ", "ISFJ", "ESTJ", "ISTJ",
+    ]
+    if mbti not in valid_mbti:
+        return {"status": "error", "error": f"无效的 MBTI 类型: {mbti}"}
+    _config["mbti"] = mbti
+    # 失效 agent 引用，下次消息自动重建
+    global _agent_ref
+    _agent_ref = None
+    _save_config()
+    return {"status": "ok", "mbti": mbti}
+
+
+@app.get("/api/relationship")
+async def get_relationship():
+    """获取当前关系阶段状态。"""
+    wrapper = _get_or_create_agent()
+    if not wrapper or not wrapper.registry:
+        return {"stage": 0, "interactions": 0, "days_together": 0, "can_progress": False}
+    rel = wrapper.registry.relationship
+    stats = rel.get_stats()
+    # 获取下一阶段进度要求
+    next_stage = rel.stages.get(stats["level"] + 1)
+    req_inter = next_stage.progress_requirements.get("min_interactions", 0) if next_stage and next_stage.progress_requirements else 0
+    return {
+        "stage": stats["level"],
+        "interactions": stats["interactions"],
+        "emotional_depth": stats["emotional_depth"],
+        "memory_count": stats["memory_count"],
+        "days_together": stats["days_together"],
+        "can_progress": stats["can_progress"],
+        "req_interactions": req_inter,
+    }
+
+
+@app.post("/api/relationship")
+async def set_relationship(body: dict):
+    """设置关系起点（仅当无互动时可设置）。"""
+    wrapper = _get_or_create_agent()
+    if not wrapper or not wrapper.registry:
+        return {"status": "error", "error": "agent 未初始化"}
+    rel = wrapper.registry.relationship
+    if rel.interaction_count > 0:
+        return {"status": "error", "error": "已开始互动，关系起点不可修改"}
+    new_stage = body.get("stage", 0)
+    if not isinstance(new_stage, int) or new_stage < 0 or new_stage > 5:
+        return {"status": "error", "error": "阶段必须是 0-5 之间的整数"}
+    rel.current_level = new_stage
+    rel._save_state()
+    stats = rel.get_stats()
+    next_stage = rel.stages.get(stats["level"] + 1)
+    req_inter = next_stage.progress_requirements.get("min_interactions", 0) if next_stage and next_stage.progress_requirements else 0
+    return {
+        "status": "ok",
+        "stage": stats["level"],
+        "interactions": stats["interactions"],
+        "days_together": stats["days_together"],
+        "can_progress": stats["can_progress"],
+        "req_interactions": req_inter,
+    }
+
+
 @app.post("/api/reload")
 async def reload_agent():
     """强制重建 agent。"""

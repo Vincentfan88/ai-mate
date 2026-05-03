@@ -3,7 +3,6 @@
     "0": {
       "name": "stranger",
       "name_cn": "陌生人",
-      "trigger_frequency_hours": 48,
       "expression_intensity": 0.3,
       "scene_multipliers": {
         "morning_greeting": 1.5,
@@ -26,8 +25,7 @@
     },
     "1": {
       "name": "acquaintance",
-      "name_cn": "熟人",
-      "trigger_frequency_hours": 24,
+      "name_cn": "初识",
       "expression_intensity": 0.4,
       "scene_multipliers": {
         "morning_greeting": 1.2,
@@ -49,9 +47,8 @@
       }
     },
     "2": {
-      "name": "friend",
-      "name_cn": "朋友",
-      "trigger_frequency_hours": 16,
+      "name": "familiar",
+      "name_cn": "熟悉",
       "expression_intensity": 0.55,
       "scene_multipliers": {
         "morning_greeting": 1.0,
@@ -73,9 +70,8 @@
       }
     },
     "3": {
-      "name": "close_friend",
-      "name_cn": "好朋友",
-      "trigger_frequency_hours": 10,
+      "name": "friend",
+      "name_cn": "朋友",
       "expression_intensity": 0.7,
       "scene_multipliers": {
         "morning_greeting": 0.8,
@@ -97,9 +93,8 @@
       }
     },
     "4": {
-      "name": "lover",
-      "name_cn": "恋人",
-      "trigger_frequency_hours": 7,
+      "name": "confidant",
+      "name_cn": "知己",
       "expression_intensity": 0.85,
       "scene_multipliers": {
         "morning_greeting": 0.7,
@@ -122,8 +117,7 @@
     },
     "5": {
       "name": "intimate",
-      "name_cn": "亲密爱人",
-      "trigger_frequency_hours": 5,
+      "name_cn": "挚友",
       "expression_intensity": 1.0,
       "scene_multipliers": {
         "morning_greeting": 0.8,
