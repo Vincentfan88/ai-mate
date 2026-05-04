@@ -89,8 +89,8 @@ _USER_KEYS = {
     "feishu_app_id", "feishu_chat_id", "feishu_enabled",
     # 本地模型（系统参数但需前端可配）
     "local_model_enabled", "local_model", "local_api_base",
-    # 模型配置（不含 api_key）
-    "model", "api_base",
+    # 模型配置
+    "model", "api_base", "api_key",
     "cloud_price_in", "cloud_price_out", "price_cache_in",
 }
 
@@ -527,10 +527,12 @@ def _card_to_persona(data: dict) -> dict:
         "greeting": first_mes or f"你好呀，我是{name}~",
     }
 
-    # 附加 system_prompt / post_history / scenario
-    extra_parts = []
+    # 保留角色卡自带的 system_prompt，供 build_system_prompt 直接使用
     if system_prompt:
-        extra_parts.append(system_prompt)
+        persona["system_prompt"] = system_prompt
+
+    # 附加 post_history / scenario 作为额外指令
+    extra_parts = []
     if post_history:
         extra_parts.append(post_history)
     if extra_parts:
@@ -840,8 +842,8 @@ async def list_personas():
 @app.get("/api/config")
 async def get_config():
     info = _get_persona_info()
-    # 过滤敏感字段，不返回给前端
-    safe_config = {k: v for k, v in _config.items() if k not in ("api_key", "feishu_app_secret")}
+    # 过滤飞书密钥，返回 api_key（本地单用户应用）
+    safe_config = {k: v for k, v in _config.items() if k not in ("feishu_app_secret",)}
     return {
         **safe_config,
         **info,

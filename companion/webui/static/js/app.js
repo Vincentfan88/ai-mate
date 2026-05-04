@@ -419,8 +419,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (sandboxFileInput) {
     sandboxFileInput.addEventListener('change', function() {
       const btn = document.getElementById('sandboxImportBtn');
-      if (btn && this.files && this.files.length > 0) {
-        btn.disabled = false;
+      if (btn) {
+        if (this.files && this.files.length > 0) {
+          btn.disabled = false;
+        } else {
+          btn.disabled = true;
+        }
       }
     });
   }

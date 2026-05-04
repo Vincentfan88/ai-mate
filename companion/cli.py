@@ -13,6 +13,7 @@
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -93,7 +94,11 @@ def build_companion_agent(
     )
 
     # 2. 动态加载人格 → 系统提示词
-    persona = load_persona(persona_name)
+    if persona_path is not None:
+        # 从自定义路径加载（用于 sandbox 导入等场景）
+        persona = json.loads(Path(persona_path).read_text(encoding="utf-8"))
+    else:
+        persona = load_persona(persona_name)
     system_prompt = build_system_prompt(persona, user_name=user_name)
 
     # 3. 创建 LLM 客户端（本地模型优先，否则按 API 地址动态判断 provider）

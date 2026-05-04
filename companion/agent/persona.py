@@ -61,6 +61,17 @@ def build_system_prompt(persona: dict, user_name: str = "") -> str:
         persona: 人格配置 dict
         user_name: 用户的名字，可选。如果提供，会在提示词中加入称呼。
     """
+    # ── 优先：角色卡自带 system_prompt（如导入的咨询师角色卡） ──
+    card_system = persona.get("system_prompt", "").strip()
+    if card_system:
+        sections = [card_system]
+        extra = persona.get("extra_instructions", "").strip()
+        if extra:
+            sections.append(extra)
+        if user_name:
+            sections.insert(0, f"对方叫 **{user_name}**，请用这个名字称呼他/她。")
+        return "\n".join(sections)
+
     name = persona.get("name", "未知")
     description = persona.get("description", "")
 
