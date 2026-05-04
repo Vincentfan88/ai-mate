@@ -4,11 +4,17 @@ import json
 import logging
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _now_bj() -> datetime:
+    """获取北京时间 (UTC+8) 的 naive datetime。"""
+    utc_now = datetime.now(timezone.utc)
+    return (utc_now.replace(tzinfo=None) + timedelta(hours=8))
 
 # ── 支持的周期类型 ────────────────────────────────────────────
 
@@ -33,7 +39,7 @@ class TimeEvent:
 
     def __post_init__(self):
         if not self.created_at:
-            self.created_at = datetime.now().isoformat()
+            self.created_at = _now_bj().isoformat()
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -48,7 +54,7 @@ class TimeEvent:
 
     def as_anniversary_text(self, now: Optional[datetime] = None) -> str:
         """返回纪念日展示文本"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         if self.is_anniversary and self.recurrence == RECURRENCE_YEARLY and self.original_year > 0:
             years = now.year - self.original_year
             if years > 0:
@@ -99,7 +105,7 @@ class TimeAwareness:
                         recurrence: str = RECURRENCE_YEARLY) -> TimeEvent:
         """添加纪念日（年度重复）"""
         # 使用当年的月日作为目标时间（便于每年检查）
-        now = datetime.now()
+        now = _now_bj()
         this_year = now.replace(month=date.month, day=date.day,
                                 hour=9, minute=0, second=0, microsecond=0)
         if this_year < now:
@@ -121,7 +127,7 @@ class TimeAwareness:
 
     def check_anniversaries_today(self, now: Optional[datetime] = None) -> List[str]:
         """检查今天是否是某个纪念日，返回展示文本列表"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         today_str = now.strftime("%m-%d")
         hits = []
         for ev in self._events:
@@ -144,7 +150,7 @@ class TimeAwareness:
     def extract_from_message(self, message: str,
                             now: Optional[datetime] = None) -> Optional[TimeEvent]:
         """从用户消息中提取时间事件。"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         match = self._match_time_expression(message, now)
         if not match:
             return None
@@ -163,7 +169,7 @@ class TimeAwareness:
 
     def check_pending(self, now: Optional[datetime] = None) -> List[TimeEvent]:
         """检查到期的 pending 事件，返回并标记为 missed。"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         due_events = []
         for ev in self._events:
             if ev.status == "pending" and not ev.is_anniversary:
@@ -185,13 +191,13 @@ class TimeAwareness:
 
     def get_pending(self, now: Optional[datetime] = None) -> List[TimeEvent]:
         """获取所有仍为 pending 的非纪念日事件"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         return [ev for ev in self._events
                 if ev.status == "pending" and not ev.is_anniversary]
 
     def get_recent(self, limit: int = 5, now: Optional[datetime] = None) -> List[TimeEvent]:
         """获取最近的时间事件（用于注入对话上下文）"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         pending = [ev for ev in self._events if ev.status == "pending" and not ev.is_anniversary]
         pending.sort(key=lambda e: e.target_time)
         return pending[:limit]
@@ -202,7 +208,7 @@ class TimeAwareness:
         if not events:
             return ""
         lines = ["[时间提醒]"]
-        now = now or datetime.now()
+        now = now or _now_bj()
         for ev in events:
             delta = (ev.target_time - now).total_seconds()
             if delta > 0:
@@ -243,7 +249,7 @@ class TimeAwareness:
     def _match_time_expression(self, message: str,
                                now: Optional[datetime] = None) -> Optional[tuple]:
         """从消息中匹配时间表达式，返回 (时间描述, target_datetime)。"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         message_lower = message.lower()
 
         # ── 规则 1: 相对时间关键词 ──

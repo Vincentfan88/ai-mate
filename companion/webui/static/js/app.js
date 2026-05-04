@@ -674,6 +674,8 @@ function connectWebSocket() {
         if (data.content === 'thinking') showTyping();
         break;
       case 'proactive':
+        // 私密模式下忽略主系统的主动触发（与后端 _sandbox_enabled 检查一致）
+        if (sandboxEnabled) break;
         hideTyping();
         if (data.emotion) currentEmotion = data.emotion;
         streamMessage(data.content, 'ai');

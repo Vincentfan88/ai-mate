@@ -434,7 +434,11 @@ class CompanionFeishuTool(Tool):
                 json={"app_id": self._app_id, "app_secret": self._app_secret},
             )
             data = resp.json()
-            self._token = data["tenant_access_token"]
+            if data.get("code") != 0:
+                raise RuntimeError(f"飞书 Token 获取失败: {data.get('msg', 'unknown')}")
+            self._token = data.get("tenant_access_token")
+            if not self._token:
+                raise RuntimeError("飞书 Token 响应格式无效")
             self._token_expire = now + data.get("expire", 7200)
 
 

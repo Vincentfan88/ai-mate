@@ -1,7 +1,7 @@
 """活人感八维度计算模块 — 从真实互动数据中推导维度值。"""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 import json
 import random
@@ -19,6 +19,12 @@ class LivenessScore:
 
 class LivenessTracker:
     """活人感八维度追踪器 — 从消息/互动中计算真实维度值。"""
+
+    @staticmethod
+    def _now_bj() -> datetime:
+        """获取北京时间 (UTC+8) 的 naive datetime。"""
+        utc_now = datetime.now(timezone.utc)
+        return (utc_now.replace(tzinfo=None) + timedelta(hours=8))
 
     DIMENSION_KEYS = [
         "主动性", "一致性", "成长性", "情绪化",
@@ -62,14 +68,14 @@ class LivenessTracker:
     @property
     def week_start(self) -> datetime:
         """本周一日期 — 动态计算，不依赖构造时间"""
-        now = datetime.now()
+        now = self._now_bj()
         return now - timedelta(days=now.weekday())
 
     def _load_history(self):
         """加载历史指标"""
         if self.data_path.exists():
             try:
-                data = json.loads(self.data_path.read_text())
+                data = json.loads(self.data_path.read_text(encoding="utf-8"))
                 self.metrics_history = [
                     LivenessScore(**m) for m in data.get("history", [])
                 ]
@@ -214,7 +220,7 @@ class LivenessTracker:
         emotional = min(1.0, unique_emotions / 5)  # 5 种以上满分
 
         # 5. 脆弱性：sigmoid 曲线，2-3 次/周最佳
-        days_this_week = max(0.001, (datetime.now() - self.week_start).total_seconds() / 86400)
+        days_this_week = max(0.001, (self._now_bj() - self.week_start).total_seconds() / 86400)
         vuln_rate = s["vulnerability_count"] / days_this_week
         vulnerability = min(1.0, vuln_rate / (vuln_rate + 2.5))
 
@@ -313,14 +319,34 @@ class LivenessTracker:
         scores = self.calculate_scores()
         overall = self.get_overall_score(scores)
         metric = LivenessScore(
-            timestamp=datetime.now().isoformat(),
+            timestamp=self._now_bj().isoformat(),
             dimension_scores=scores,
             overall_score=overall,
             sample_count=self.current_session["total_messages"],
         )
         self.metrics_history.append(metric)
         self._save_history()
+        # 重置 session 计数器，防止无限累积导致分数失真
+        self._reset_session()
         return metric
+
+    def _reset_session(self):
+        """重置当前 session 计数器"""
+        self.current_session = {
+            "initiated_contacts": 0,
+            "total_contacts": 0,
+            "emotions_expressed": [],
+            "vulnerability_count": 0,
+            "physical_references": 0,
+            "unpredictable_responses": 0,
+            "user_references": 0,
+            "total_messages": 0,
+            "contradictions_detected": 0,
+            "inferences_made": 0,
+            "impulsive_triggers": 0,
+            "surprise_triggered": False,
+            "nickname_used": "",
+        }
 
     def get_trend(self, dimension: str, last_n: int = 7) -> dict:
         """获取维度趋势"""

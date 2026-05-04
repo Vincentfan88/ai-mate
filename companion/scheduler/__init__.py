@@ -16,6 +16,14 @@ from companion.modules.registry import CompanionRegistry
 logger = logging.getLogger(__name__)
 
 
+def _now_bj() -> datetime:
+    """获取北京时间 (UTC+8) 的 naive datetime，用于本地时间比较。"""
+    from datetime import timezone
+    utc_now = datetime.now(timezone.utc)
+    # UTC+8
+    return (utc_now.replace(tzinfo=None) + __import__('datetime').timedelta(hours=8))
+
+
 class MessageRouter:
     """消息路由器 — 单 Agent + asyncio.Queue"""
 
@@ -40,6 +48,9 @@ class MessageRouter:
                 self.queue.task_done()
             except asyncio.TimeoutError:
                 continue
+            except Exception as e:
+                logger.error(f"MessageRouter error: {e}", exc_info=True)
+                await asyncio.sleep(1.0)
 
     def stop(self):
         self._running = False
@@ -72,7 +83,7 @@ class ProactiveLoop:
 
     async def _check_trigger(self):
         """检查是否应该触发主动联系"""
-        now = datetime.now()
+        now = _now_bj()
 
         # ── 预检查：最近 30 分钟内有用户对话则不主动联系 ──
         try:
@@ -119,7 +130,7 @@ class ProactiveLoop:
             event = {
                 "type": "anniversary_trigger",
                 "anniversaries": anniversary_hits,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": _now_bj().isoformat(),
             }
             if self.on_trigger and asyncio.iscoroutinefunction(self.on_trigger):
                 await self.on_trigger(event)
@@ -128,7 +139,6 @@ class ProactiveLoop:
             return
 
         # 检查习惯（今日 emoji/口头禅）
-        daily_emoji = None
         catchphrase = None
         try:
             daily_emoji = self.registry.habits.get_daily_emoji()
@@ -148,7 +158,7 @@ class ProactiveLoop:
                     "daily_emoji": daily_emoji,
                     "catchphrase": catchphrase,
                 },
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": _now_bj().isoformat(),
             }
             # 支持同步和异步回调
             if asyncio.iscoroutinefunction(self.on_trigger):
@@ -170,7 +180,7 @@ class WebhookListener:
     async def handle_message(self, message: dict):
         """处理外部传入的消息"""
         # Enrich with context
-        message["received_at"] = datetime.now()
+        message["received_at"] = _now_bj()
 
         # Record interaction (new API)
         self.registry.memory.add_conversation(
@@ -241,7 +251,7 @@ class TrendingFetcher:
 
     async def _fetch_llm(self) -> bool:
         """通过 LLM API生成热点话题"""
-        today = datetime.now().strftime("%Y年%m月%d日")
+        today = _now_bj().strftime("%Y年%m月%d日")
         system_prompt = (
             "你是一个了解中国时事的助手。请根据当前日期，生成20个当天可能热门的"
             "社会话题标题（如新闻事件、节日、体育、娱乐等）。"

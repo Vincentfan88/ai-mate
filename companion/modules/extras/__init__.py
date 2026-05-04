@@ -6,11 +6,17 @@ Extras 模块 — 时间上下文 + 习惯 + 热搜缓存
 import json
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from .time_awareness import TimeAwareness, TimeEvent
+
+
+def _now_bj() -> datetime:
+    """获取北京时间 (UTC+8) 的 naive datetime。"""
+    utc_now = datetime.now(timezone.utc)
+    return (utc_now.replace(tzinfo=None) + timedelta(hours=8))
 
 
 @dataclass
@@ -26,7 +32,7 @@ class TimeContext:
 
     @classmethod
     def from_now(cls, now: Optional[datetime] = None) -> "TimeContext":
-        now = now or datetime.now()
+        now = now or _now_bj()
         hour = now.hour
         return cls(
             hour=hour,
@@ -79,7 +85,7 @@ class HabitTracker:
         """加载习惯状态"""
         if self.state_path.exists():
             try:
-                data = json.loads(self.state_path.read_text())
+                data = json.loads(self.state_path.read_text(encoding="utf-8"))
                 self._daily_emoji = data.get("daily_emoji", {})
             except Exception:
                 pass
@@ -89,7 +95,7 @@ class HabitTracker:
         data = {
             "daily_emoji": self._daily_emoji,
         }
-        self.state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        self.state_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def add_habit(self, habit: str, frequency: str = "daily"):
         if frequency in self.habits:
@@ -97,7 +103,7 @@ class HabitTracker:
 
     def get_daily_emoji(self, now: Optional[datetime] = None) -> Optional[str]:
         """获取今日 emoji — 按日期固定，非随机"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         today_str = now.strftime("%Y-%m-%d")
 
         if today_str in self._daily_emoji:
@@ -137,7 +143,7 @@ class TrendingCache:
             data = json.loads(self.cache_path.read_text())
             # Check if cache is stale (older than 4 hours)
             cached_at = datetime.fromisoformat(data["cached_at"])
-            if (datetime.now() - cached_at).total_seconds() > 4 * 3600:
+            if (_now_bj() - cached_at).total_seconds() > 4 * 3600:
                 return None
             return data.get("items", [])
         except Exception:
@@ -146,7 +152,7 @@ class TrendingCache:
     def save(self, items: List[dict]):
         """保存热搜到缓存"""
         data = {
-            "cached_at": datetime.now().isoformat(),
+            "cached_at": _now_bj().isoformat(),
             "items": items,
         }
         self.cache_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))

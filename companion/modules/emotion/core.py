@@ -3,7 +3,7 @@
 import json
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from .circadian import compute_circadian
@@ -12,6 +12,12 @@ from .contagion import compute_contagion
 from .residue import EmotionResidue
 
 logger = logging.getLogger(__name__)
+
+
+def _now_bj() -> datetime:
+    """获取北京时间 (UTC+8) 的 naive datetime。"""
+    utc_now = datetime.now(timezone.utc)
+    return (utc_now.replace(tzinfo=None) + timedelta(hours=8))
 
 # 情绪之间的"距离"矩阵 — 相近情绪过渡平滑，远距离情绪变化突兀
 _EMOTION_DISTANCE: Dict[str, Dict[str, float]] = {
@@ -61,7 +67,7 @@ class EmotionSystem:
     def get_current_emotion(
         self, event_type: str, user_emotion: str = None
     ) -> dict:
-        now = datetime.now()
+        now = _now_bj()
         hour = now.hour
 
         # 1. 自动映射：user_emotion → 对应的 event_type（使 event_weight 配置生效）

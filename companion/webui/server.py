@@ -80,7 +80,7 @@ CONFIG_FILE = Path("workspace/companion/config.json")
 
 # 可持久化的配置字段（前端"保存"时写入 config.json）
 # 注意：这些字段也会从 .env 环境变量加载，config.json 中的值会覆盖 .env 的默认值
-# 敏感密钥（api_key, feishu_app_secret）只从 .env 读取，不写入磁盘
+# 敏感密钥（feishu_app_secret）只从 .env 读取，不写入磁盘；api_key 例外，可保存到 config.json
 _USER_KEYS = {
     # 用户行为设定
     "mbti", "persona", "user_name", "budget",
@@ -152,6 +152,13 @@ def _inject_conversation_history(agent, registry) -> None:
 
 # WebSocket 连接的客户端集合
 _ws_clients: list = []
+_ws_lock: asyncio.Lock | None = None  # 延迟初始化
+
+def _get_ws_lock() -> asyncio.Lock:
+    global _ws_lock
+    if _ws_lock is None:
+        _ws_lock = asyncio.Lock()
+    return _ws_lock
 
 
 def _config_hash() -> str:
@@ -325,22 +332,35 @@ def _destroy_sandbox() -> None:
 
 async def _ws_broadcast(msg: dict) -> None:
     """向所有 WebSocket 客户端广播消息。"""
+    lock = _get_ws_lock()
+    async with lock:
+        clients = list(_ws_clients)
     dead_clients = []
-    for client in list(_ws_clients):
+    for client in clients:
         try:
             await client.send_json(msg)
         except Exception:
             dead_clients.append(client)
     # 清理已断开的连接
-    for client in dead_clients:
-        try:
-            _ws_clients.remove(client)
-        except ValueError:
-            pass
+    if dead_clients:
+        async with lock:
+            for client in dead_clients:
+                try:
+                    _ws_clients.remove(client)
+                except ValueError:
+                    pass
 
 
 async def _on_proactive_trigger(event: dict) -> None:
-    """ProactiveLoop 回调 — 生成主动消息并发送。"""
+    """ProactiveLoop 回调 — 生成主动消息并发送。
+
+    私密模式下跳过主动触发，避免主系统的主动性模块乱入私密对话。
+    """
+    global _sandbox_enabled
+    if _sandbox_enabled:
+        logger.debug("[Proactive] 私密模式已开启，跳过主动触发")
+        return
+
     decision = event["decision"]
     wrapper = _get_or_create_agent()
 
@@ -485,10 +505,10 @@ def _card_to_persona(data: dict) -> dict:
     system_prompt = data.get("system_prompt", "")
     post_history = data.get("post_history_instructions", "")
 
-    # 解析 personality 文本为核心特质
+    # 解析 personality 文本为核心特质（限制 10 行，防止 prompt 膨胀）
     traits = []
     if personality_text:
-        for line in personality_text.strip().split("\n"):
+        for line in personality_text.strip().split("\n")[:10]:
             line = line.strip()
             if line:
                 traits.append(line)
@@ -550,6 +570,7 @@ async def import_character(file: UploadFile = File(...)):
         persona = _card_to_persona(data)
 
         safe_name = "".join(c for c in persona["name"] if c.isalnum() or c in " _-").strip()
+        safe_name = re.sub(r'[\s_-]+', '-', safe_name)  # 合并连续空格/下划线/短横线
         if not safe_name:
             safe_name = "imported_character"
         filename = f"{safe_name}.json"
@@ -1129,7 +1150,9 @@ async def sandbox_import_persona(file: UploadFile = File(...)):
 @app.websocket("/ws/chat")
 async def websocket_chat(ws: WebSocket):
     await ws.accept()
-    _ws_clients.append(ws)
+    lock = _get_ws_lock()
+    async with lock:
+        _ws_clients.append(ws)
     try:
         while True:
             data = await ws.receive_text()
@@ -1176,8 +1199,11 @@ async def websocket_chat(ws: WebSocket):
     except Exception as e:
         logging.getLogger("companion").error(f"WebSocket 连接异常: {e}", exc_info=True)
     finally:
-        if ws in _ws_clients:
-            _ws_clients.remove(ws)
+        async with lock:
+            try:
+                _ws_clients.remove(ws)
+            except ValueError:
+                pass
 
 
 # 静态文件

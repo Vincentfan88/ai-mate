@@ -1,8 +1,16 @@
 """人格加载器 — 从 JSON 配置动态生成系统提示词。"""
 
 import json
+import re
 from pathlib import Path
 from typing import Optional
+
+
+def _sanitize_user_name(name: str) -> str:
+    """清理 user_name，防止 markdown 注入系统提示词。"""
+    # 移除 markdown 特殊字符
+    name = re.sub(r'[*_#`~\[\]]', '', name)
+    return name.strip()
 
 
 def load_persona(name: str = "default") -> dict:
@@ -61,6 +69,9 @@ def build_system_prompt(persona: dict, user_name: str = "") -> str:
         persona: 人格配置 dict
         user_name: 用户的名字，可选。如果提供，会在提示词中加入称呼。
     """
+    # 清理 user_name，防止 markdown 注入系统提示词
+    user_name = _sanitize_user_name(user_name)
+
     # ── 优先：角色卡自带 system_prompt（如导入的咨询师角色卡） ──
     card_system = persona.get("system_prompt", "").strip()
     if card_system:

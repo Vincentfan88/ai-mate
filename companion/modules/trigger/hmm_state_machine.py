@@ -3,11 +3,17 @@
 import json
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger("companion")
+
+
+def _now_bj() -> datetime:
+    """获取北京时间 (UTC+8) 的 naive datetime。"""
+    utc_now = datetime.now(timezone.utc)
+    return (utc_now.replace(tzinfo=None) + timedelta(hours=8))
 
 
 class CompanionState:
@@ -98,7 +104,7 @@ class StateHistory:
     def record(self, state: str, timestamp: datetime = None):
         self.entries.append({
             "state": state,
-            "timestamp": (timestamp or datetime.now()).isoformat(),
+            "timestamp": (timestamp or _now_bj()).isoformat(),
         })
         if len(self.entries) > self.max_entries:
             self.entries = self.entries[-self.max_entries:]
@@ -110,7 +116,7 @@ class StateHistory:
         if last["state"] != state:
             return None
         last_time = datetime.fromisoformat(last["timestamp"])
-        return (datetime.now() - last_time).total_seconds() / 3600
+        return (_now_bj() - last_time).total_seconds() / 3600
 
 
 class HMMStateMachine:
@@ -145,7 +151,7 @@ class HMMStateMachine:
         """从文件恢复状态"""
         if self.state_path:
             try:
-                data = json.loads(Path(self.state_path).read_text())
+                data = json.loads(Path(self.state_path).read_text(encoding="utf-8"))
                 self.current_state = data.get("state", CompanionState.IDLE)
                 self.last_user_message = None
                 if data.get("last_user_message"):
@@ -180,8 +186,8 @@ class HMMStateMachine:
 
     def _record_change(self, new_state: str):
         self.current_state = new_state
-        self.state_entered_at = datetime.now()
-        self._last_state_time[new_state] = datetime.now()
+        self.state_entered_at = _now_bj()
+        self._last_state_time[new_state] = _now_bj()
         self.state_history.record(new_state)
         self.transition_count += 1
         self._save_state()
@@ -201,7 +207,7 @@ class HMMStateMachine:
             (should_transition, target_state)
         """
         if hour_of_day is None:
-            hour_of_day = datetime.now().hour
+            hour_of_day = _now_bj().hour
 
         # 规则 1: 长时间未联系 → 思念状态
         if hours_since_contact is not None:
@@ -227,7 +233,7 @@ class HMMStateMachine:
 
     def transition(self, now: datetime = None) -> str:
         """兼容旧接口的 transition 方法"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         hours = None
         if self.last_user_message:
             hours = (now - self.last_user_message).total_seconds() / 3600
@@ -244,7 +250,7 @@ class HMMStateMachine:
     def _is_in_cooldown(self, target_state: str) -> bool:
         """检查目标状态是否在冷却期内"""
         if target_state in self._cooldown_until:
-            if datetime.now() < self._cooldown_until[target_state]:
+            if _now_bj() < self._cooldown_until[target_state]:
                 return True
         return False
 
@@ -253,11 +259,11 @@ class HMMStateMachine:
         from datetime import timedelta
         cooldown_hours = self.config.get(state, {}).get("cooldown_hours", 0)
         if cooldown_hours > 0:
-            self._cooldown_until[state] = datetime.now() + timedelta(hours=cooldown_hours)
+            self._cooldown_until[state] = _now_bj() + timedelta(hours=cooldown_hours)
 
     def on_user_message(self, now: datetime = None):
         """用户发消息时切换到 active"""
-        now = now or datetime.now()
+        now = now or _now_bj()
         self.last_user_message = now
         self._record_change(CompanionState.ACTIVE)
 

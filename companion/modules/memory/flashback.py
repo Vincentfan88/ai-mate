@@ -1,11 +1,21 @@
 """记忆闪回模块 — 自然提起旧话题，增加活人感。"""
 
+import logging
 import random
 from dataclasses import dataclass
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Tuple
 
 from .store import MemoryStore
+
+
+logger = logging.getLogger(__name__)
+
+
+def _now_bj() -> datetime:
+    """获取北京时间 (UTC+8) 的 naive datetime。"""
+    utc_now = datetime.now(timezone.utc)
+    return (utc_now.replace(tzinfo=None) + timedelta(hours=8))
 
 
 @dataclass
@@ -31,7 +41,7 @@ class FlashbackEngine:
     def __init__(self, memory_store: MemoryStore, data_path: str = "workspace/companion/states/flashback_state.json"):
         self._store = memory_store
         self._data_path = data_path
-        self._last_flashbacks: List[str] = []  # 格式: [(fact_id, timestamp)]
+        self._last_flashbacks: List[Tuple[str, str]] = []  # 格式: [(fact_id, timestamp)]
 
     def get_flashback(
         self,
@@ -50,7 +60,7 @@ class FlashbackEngine:
         Returns:
             0-3 条 Flashback，按相关性排序
         """
-        now = now or datetime.now()
+        now = now or _now_bj()
 
         # 用当前消息检索记忆
         search_results = self._store.search(query=current_message, top_k=10)

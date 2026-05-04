@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 PLUGINS_DIR = Path(__file__).parent
 
+# ── 插件白名单：仅允许加载以下已知安全的插件 ──
+ALLOWED_PLUGINS: set[str] = set()  # 空表示扫描时无需白名单校验，但 import 前会校验目录结构
+
 
 def load_plugin_tools(registry: CompanionRegistry) -> List:
     """扫描并加载 companion/plugins/ 下所有插件的 Tool。
@@ -39,6 +42,12 @@ def load_plugin_tools(registry: CompanionRegistry) -> List:
 
         init_file = item / "__init__.py"
         if not init_file.exists():
+            continue
+
+        # ── 安全检查：只允许 __init__.py，拒绝额外 .py 文件（防恶意代码） ──
+        py_files = [f for f in item.glob("*.py") if f.name != "__init__.py"]
+        if py_files:
+            logger.warning(f"[Plugins] Skipping '{item.name}': unexpected files {py_files}")
             continue
 
         try:

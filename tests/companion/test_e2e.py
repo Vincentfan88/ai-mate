@@ -141,10 +141,13 @@ class TestEndToEnd:
     def test_liveness_tracking(self, registry):
         """Test: liveness metrics are tracked throughout."""
         registry.liveness.record_initiated_contact()
-        registry.liveness.snapshot()
 
         metrics = registry.liveness.calculate_scores()
         assert metrics["主动性"] == 1.0
+
+        # snapshot 会保存并重置 session
+        snapshot = registry.liveness.snapshot()
+        assert snapshot.dimension_scores["主动性"] == 1.0
 
     def test_trending_integration(self, registry):
         """Test: trending cache works end-to-end."""

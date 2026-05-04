@@ -1,8 +1,11 @@
 """情绪残留：跨 session 的情绪连续性，随时间衰减。"""
 
 import json
+import logging
 import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class EmotionResidue:
@@ -17,8 +20,12 @@ class EmotionResidue:
         if not self.state_file.exists():
             return {}
         try:
-            return json.loads(self.state_file.read_text())
-        except Exception:
+            return json.loads(self.state_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            logger.warning(f"[EmotionResidue] 状态文件 JSON 解析失败: {e}")
+            return {}
+        except OSError as e:
+            logger.warning(f"[EmotionResidue] 状态文件读取失败: {e}")
             return {}
 
     def save(self, emotion: str, intensity: float):
