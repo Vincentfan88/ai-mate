@@ -100,9 +100,9 @@ class ProactiveLoop:
                     "events": event_descs,
                     "timestamp": now.isoformat(),
                 }
-                if asyncio.iscoroutinefunction(self.on_trigger):
+                if self.on_trigger and asyncio.iscoroutinefunction(self.on_trigger):
                     await self.on_trigger(event)
-                else:
+                elif self.on_trigger:
                     self.on_trigger(event)
                 return
         except Exception as e:
@@ -121,9 +121,9 @@ class ProactiveLoop:
                 "anniversaries": anniversary_hits,
                 "timestamp": datetime.now().isoformat(),
             }
-            if asyncio.iscoroutinefunction(self.on_trigger):
+            if self.on_trigger and asyncio.iscoroutinefunction(self.on_trigger):
                 await self.on_trigger(event)
-            else:
+            elif self.on_trigger:
                 self.on_trigger(event)
             return
 

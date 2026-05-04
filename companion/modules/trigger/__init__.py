@@ -50,7 +50,7 @@ class TriggerEngine:
         state_path: Optional[str] = None,
         quiet_hours: Optional[tuple] = None,
     ):
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             self.config = json.load(f)
 
         # Connection axis

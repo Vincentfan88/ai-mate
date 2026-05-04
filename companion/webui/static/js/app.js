@@ -8,6 +8,162 @@ let messageCount = 0;
 let currentEmotion = '';  // AI current emotion for status bar
 let currentHmmState = '';  // HMM state for status bar
 
+// ── Sandbox / Incognito Mode ──
+let sandboxEnabled = false;
+let sandboxPersonaName = null;
+
+// ── Sandbox Functions ──
+async function toggleSandbox() {
+  const checkbox = document.getElementById('sandboxToggle');
+  const enable = checkbox.checked;
+
+  try {
+    const res = await fetch('/api/sandbox/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enable }),
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      sandboxEnabled = data.enabled;
+      sandboxPersonaName = data.persona || null;
+      updateSandboxUI();
+
+      if (sandboxEnabled) {
+        // 开启时清除前端消息（视觉干净）
+        messages = [];
+        msgContainer.innerHTML = '';
+        welcomeScreen.style.display = '';
+        msgContainer.style.display = 'none';
+        lastSenderRole = null;
+        lastMessageTime = null;
+        showToast('🔒 私密模式已开启 — 可导入专属私密角色卡');
+      } else {
+        showToast('🔥 私密记录已焚毁');
+      }
+    } else {
+      showToast('操作失败: ' + (data.detail || data.error || '未知错误'), 'error');
+      // revert UI
+      sandboxEnabled = !sandboxEnabled;
+      checkbox.checked = sandboxEnabled;
+      updateSandboxUI();
+    }
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+    sandboxEnabled = !sandboxEnabled;
+    checkbox.checked = sandboxEnabled;
+    updateSandboxUI();
+  }
+}
+
+async function clearSandbox() {
+  if (!confirm('确定要焚毁当前私密会话的所有记录吗？此操作不可恢复。')) return;
+
+  try {
+    const res = await fetch('/api/sandbox/clear', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      sandboxEnabled = false;
+      sandboxPersonaName = null;
+      document.getElementById('sandboxToggle').checked = false;
+      updateSandboxUI();
+
+      // 清除前端消息
+      messages = [];
+      msgContainer.innerHTML = '';
+      welcomeScreen.style.display = '';
+      msgContainer.style.display = 'none';
+      lastSenderRole = null;
+      lastMessageTime = null;
+
+      showToast('🔥 私密记录已焚毁');
+    } else {
+      showToast('焚毁失败: ' + (data.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('焚毁失败: ' + e.message, 'error');
+  }
+}
+
+async function importSandboxPersona() {
+  const fileInput = document.getElementById('sandboxFileInput');
+  if (!fileInput.files || fileInput.files.length === 0) {
+    showToast('请先选择角色卡文件');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+
+  const btn = document.getElementById('sandboxImportBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '导入中…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/sandbox/import-persona', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || '导入失败');
+    }
+
+    const data = await res.json();
+    sandboxPersonaName = data.persona;
+    showToast(`🔒 私密角色 "${data.persona}" 已导入 — 关闭模式时自动焚毁`);
+    updateSandboxUI();
+
+    // 清除选择
+    fileInput.value = '';
+  } catch (e) {
+    showToast('❌ ' + e.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+function updateSandboxUI() {
+  const toggle = document.getElementById('sandboxToggle');
+  const actions = document.getElementById('sandboxActions');
+  const hint = document.getElementById('sandboxHint');
+  const sandboxCard = document.getElementById('sandboxCard');
+  const personaStatus = document.getElementById('sandboxPersonaStatus');
+
+  if (toggle) toggle.checked = sandboxEnabled;
+  if (actions) actions.style.display = sandboxEnabled ? '' : 'none';
+  if (hint) hint.textContent = sandboxEnabled
+    ? '私密模式已开启 — 所有对话和角色卡临时保存，关闭即焚毁'
+    : '开启后对话记录和角色卡写入临时沙盒，关闭即刻焚毁';
+  if (sandboxCard) {
+    sandboxCard.classList.toggle('active', sandboxEnabled);
+  }
+  if (personaStatus) {
+    personaStatus.textContent = sandboxPersonaName
+      ? `🔒 已加载私密角色: ${sandboxPersonaName}`
+      : '未导入私密角色卡';
+  }
+
+  // Chat header badge
+  const badge = document.getElementById('sandboxBadge');
+  if (badge) badge.style.display = sandboxEnabled ? 'inline-flex' : 'none';
+}
+
+async function loadSandboxState() {
+  try {
+    const res = await fetch('/api/config');
+    const config = await res.json();
+    sandboxEnabled = config.sandbox_enabled || false;
+    sandboxPersonaName = config.sandbox_persona || null;
+    updateSandboxUI();
+  } catch (e) {
+    console.error('Failed to load sandbox state', e);
+  }
+}
+
 // ── DOM refs ──
 const $ = (s) => document.querySelector(s);
 const chatView = document.getElementById('chatView');
@@ -24,6 +180,7 @@ const welcomeScreen = document.getElementById('welcomeScreen');
 async function init() {
   await loadConfig();
   await loadPersonas();
+  await loadSandboxState();
   updateWelcomeText();
   connectWebSocket();
   chatInput.focus();
@@ -250,9 +407,40 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Sandbox toggle
+  const sandboxToggle = document.getElementById('sandboxToggle');
+  if (sandboxToggle) {
+    sandboxToggle.addEventListener('change', toggleSandbox);
+  }
+
+  // Sandbox file input
+  const sandboxFileInput = document.getElementById('sandboxFileInput');
+  if (sandboxFileInput) {
+    sandboxFileInput.addEventListener('change', function() {
+      const btn = document.getElementById('sandboxImportBtn');
+      if (btn && this.files && this.files.length > 0) {
+        btn.disabled = false;
+      }
+    });
+  }
 });
 
 async function importCharacter() {
+  // 私密模式下走专用导入流程
+  if (sandboxEnabled) {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files || fileInput.files.length === 0) return;
+    // 把文件拷贝到 sandbox file input 然后走私密导入
+    const sandboxFileInput = document.getElementById('sandboxFileInput');
+    const file = fileInput.files[0];
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    sandboxFileInput.files = dt.files;
+    await importSandboxPersona();
+    return;
+  }
+
   const fileInput = document.getElementById('fileInput');
   if (!fileInput.files || fileInput.files.length === 0) return;
 

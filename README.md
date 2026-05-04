@@ -1,6 +1,6 @@
 # ai-mate
 
-AI 伙伴系统 v2.0 — 拥有"活人感"的 AI 伙伴，支持 16 种 MBTI 人格、飞书 Bot 集成和 Web UI。
+AI 伙伴系统 v1.1 — 拥有"活人感"的 AI 伙伴，支持 16 种 MBTI 人格、飞书 Bot 集成和 Web UI。
 
 [中文](#中文) | [English](#english)
 
@@ -19,8 +19,9 @@ ai-mate 是一个基于 Mini-Agent 框架的 AI 伙伴系统。它将 24K 行 Fl
 - **记忆系统** — L1 事实库 + L2+ 偏好推断 + 矛盾检测
 - **场景匹配** — 基于心境、时段、关系上下文的加权场景推荐
 - **飞书 Bot** — WebSocket 长连接，可在飞书群聊中运行
+- **私密模式** — 所有对话、记忆、状态数据写入临时沙盒，关闭后自动销毁，不留任何痕迹
 - **角色隔离** — 多个角色共享同一个系统，但记忆、状态、偏好完全隔离
-- **Web UI** — FastAPI Web 界面
+- **Web UI** — FastAPI 界面
 
 ### 快速开始
 
@@ -98,7 +99,7 @@ ai-mate/
 │   ├── agent/               # Mini-Agent 集成层
 │   ├── plugins/             # 插件系统（可扩展）
 │   └── cli.py               # CLI 入口
-├── tests/                   # 测试（296 passed）
+├── tests/                   # 测试（302 passed）
 └── docs/                    # 设计文档
 ```
 
@@ -106,7 +107,7 @@ ai-mate/
 
 ```bash
 python -m pytest tests/companion/ -v --tb=short
-# 296 passed, 0 failed
+# 302 passed, 0 failed
 ```
 
 ### 设计文档
@@ -121,7 +122,7 @@ python -m pytest tests/companion/ -v --tb=short
 
 ### Overview
 
-ai-mate is an AI mate system built on the Mini-Agent framework. It ported the "aliveness" capabilities from a 24K-line Flask system into a lightweight async Agent loop, preserving all core features:
+ai-mate is an AI mate system v1.1 built on the Mini-Agent framework. It ported the "aliveness" capabilities from a 24K-line Flask system into a lightweight async Agent loop, preserving all core features:
 
 - **16 MBTI Personalities** — Each with distinct speaking style, emotional expression, and scene adaptation
 - **8-Dimension Liveness** — Spontaneous expression, initiative, emotional depth, scene matching, and more
@@ -130,6 +131,7 @@ ai-mate is an AI mate system built on the Mini-Agent framework. It ported the "a
 - **Memory System** — L1 facts + L2+ preference inference + contradiction detection
 - **Scene Matching** — Context-aware weighted scene recommendation
 - **Feishu Bot** — WebSocket long-running connection for Feishu group chat integration
+- **Private/Incognito Mode** — All conversations, memory, and state data written to a temporary sandbox, automatically destroyed on exit with no trace
 - **Persona Isolation** — Multiple characters share one system with fully isolated memory and state
 - **Web UI** — FastAPI web interface
 
@@ -195,7 +197,7 @@ launchctl start com.ai-mate.webui
 
 ```bash
 python -m pytest tests/companion/ -v --tb=short
-# 296 passed, 0 failed
+# 302 passed, 0 failed
 ```
 
 ---

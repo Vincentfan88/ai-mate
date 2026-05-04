@@ -6,7 +6,9 @@ import io
 import json
 import logging
 import os
+import shutil
 import struct
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -67,6 +69,11 @@ _feishu_bot = None
 
 # 主动触发循环
 _proactive_loop = None
+
+# 无痕模式沙盒 agent — 与主 agent 完全独立
+_sandbox_agent = None          # (tempdir, SilentAgentWrapper, persona_dict) 或 None
+_sandbox_enabled = False       # 当前是否处于无痕模式
+_sandbox_persona_name = None   # 私密角色名称
 
 # 配置持久化文件路径 — 保存用户设定
 CONFIG_FILE = Path("workspace/companion/config.json")
@@ -255,6 +262,62 @@ def _stop_feishu_bot() -> None:
 def _get_or_create_agent_wrapper() -> SilentAgentWrapper:
     """获取或创建 agent wrapper（供飞书 Bot 共享）。"""
     return _get_or_create_agent()
+
+
+# ── 沙盒（无痕模式）生命周期 ───────────────────────────────────
+
+
+def _create_sandbox_agent(persona_path: str | None = None) -> tuple:
+    """创建沙盒 agent — 使用临时目录作为 workspace。
+
+    返回 (tempdir, wrapper, persona) 元组。
+    """
+    global _config
+    tempdir = tempfile.TemporaryDirectory(prefix="ai-mate-sandbox-")
+    sandbox_workspace = tempdir.name
+
+    logger.info(f"[Sandbox] 创建临时 workspace: {sandbox_workspace}")
+
+    try:
+        # 使用默认 persona 路径，除非指定了私密角色卡
+        if persona_path is None:
+            persona_path = str(BASE_DIR.parent / "skills" / "companion" / "default.json")
+
+        agent, registry, persona = build_companion_agent(
+            mbti_type=_config.get("mbti"),
+            persona_name=_config.get("persona", "sandbox"),
+            model=_config.get("model"),
+            api_base=_config.get("api_base"),
+            api_key=_config.get("api_key"),
+            workspace=sandbox_workspace,
+            persona_path=persona_path,
+            max_steps=_config.get("max_steps"),
+        )
+        if agent is None:
+            raise RuntimeError("Failed to build sandbox agent")
+
+        wrapper = SilentAgentWrapper(agent, registry)
+        return (tempdir, wrapper, persona)
+    except Exception:
+        tempdir.cleanup()
+        raise
+
+
+def _destroy_sandbox() -> None:
+    """销毁沙盒 agent + 清理临时目录。"""
+    global _sandbox_agent, _sandbox_enabled, _sandbox_persona_name
+
+    if _sandbox_agent:
+        tempdir, wrapper, _ = _sandbox_agent
+        try:
+            tempdir.cleanup()
+            logger.info("[Sandbox] 临时目录已销毁")
+        except Exception as e:
+            logger.warning(f"[Sandbox] 清理临时目录失败: {e}")
+        _sandbox_agent = None
+
+    _sandbox_enabled = False
+    _sandbox_persona_name = None
 
 
 # ── 主动触发 + 消息路由 ────────────────────────────────────────
@@ -726,8 +789,6 @@ async def delete_avatar(role: str):
 @app.post("/api/delete-persona")
 async def delete_persona(body: dict):
     """删除角色卡文件及其专属工作区数据。"""
-    import shutil
-
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="角色名不能为空")
@@ -787,6 +848,8 @@ async def get_config():
         "has_avatar_ai": _has_avatar("ai"),
         "has_avatar_user": _has_avatar("user"),
         "feishu_connected": _feishu_bot.is_connected if _feishu_bot else False,
+        "sandbox_enabled": _sandbox_enabled,
+        "sandbox_persona": _sandbox_persona_name,
     }
 
 
@@ -923,6 +986,143 @@ async def token_reset():
     return {"status": "ok"}
 
 
+# ── 无痕模式（沙盒）API ─────────────────────────────────────
+
+
+@app.post("/api/sandbox/toggle")
+async def toggle_sandbox(body: dict):
+    """开启/关闭私密模式。
+
+    开启: 创建沙盒 agent，workspace 指向 tempdir
+    关闭: 销毁沙盒 agent + tempdir.cleanup()
+    """
+    global _sandbox_agent, _sandbox_enabled, _sandbox_persona_name
+
+    enabled = body.get("enabled", False)
+
+    if enabled and not _sandbox_enabled:
+        try:
+            _sandbox_agent = _create_sandbox_agent()
+            _sandbox_enabled = True
+            _sandbox_persona_name = _sandbox_agent[2].get("name", "sandbox")
+            logger.info(f"[Sandbox] 私密模式已开启: {_sandbox_persona_name}")
+            return {
+                "status": "ok",
+                "enabled": True,
+                "persona": _sandbox_persona_name,
+                "message": "私密模式已开启",
+            }
+        except Exception as e:
+            logger.error(f"[Sandbox] 创建失败: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="创建失败，请稍后重试")
+
+    elif not enabled and _sandbox_enabled:
+        _destroy_sandbox()
+        logger.info("[Sandbox] 私密模式已关闭")
+        return {"status": "ok", "enabled": False, "message": "私密模式已关闭，记录已焚毁"}
+
+    # 状态未变化
+    return {"status": "ok", "enabled": _sandbox_enabled, "persona": _sandbox_persona_name}
+
+
+@app.post("/api/sandbox/clear")
+async def clear_sandbox():
+    """关闭私密模式并销毁所有临时数据。"""
+    global _sandbox_agent, _sandbox_enabled, _sandbox_persona_name
+
+    if not _sandbox_enabled:
+        return {"status": "ok", "message": "私密模式未开启"}
+
+    _destroy_sandbox()
+    return {"status": "ok", "message": "私密记录已焚毁"}
+
+
+@app.post("/api/sandbox/import-persona")
+async def sandbox_import_persona(file: UploadFile = File(...)):
+    """私密模式下导入角色卡 — 存到 tempdir 内，关闭时一起销毁。
+
+    仅在私密模式已开启时可调用。
+    """
+    global _sandbox_agent, _sandbox_enabled, _sandbox_persona_name
+
+    if not _sandbox_enabled or not _sandbox_agent:
+        raise HTTPException(status_code=400, detail="请先开启私密模式")
+
+    # 文件大小限制（10MB）
+    MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="角色卡文件过大（最大 10MB）")
+
+    filename = file.filename or "sandbox_persona.json"
+
+    try:
+        # 解析角色卡
+        data = _parse_character_card(content, filename)
+        persona_data = _card_to_persona(data)
+
+        safe_name = "".join(c for c in persona_data["name"] if c.isalnum() or c in " _-").strip()
+        if not safe_name:
+            safe_name = "sandbox_persona"
+        persona_file = f"{safe_name}.json"
+
+        # 先构建新 agent，成功后再原子性替换引用（避免竞态）
+        new_tempdir = tempfile.TemporaryDirectory(prefix="ai-mate-sandbox-")
+        new_workspace = new_tempdir.name
+        new_persona_dir = Path(new_workspace) / "persona"
+        new_persona_dir.mkdir(exist_ok=True)
+
+        temp_persona_path = new_persona_dir / persona_file
+        temp_persona_path.write_text(
+            json.dumps(persona_data, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        try:
+            new_agent, new_registry, new_persona_obj = build_companion_agent(
+                mbti_type=_config.get("mbti"),
+                persona_name=safe_name,
+                model=_config.get("model"),
+                api_base=_config.get("api_base"),
+                api_key=_config.get("api_key"),
+                workspace=new_workspace,
+                persona_path=str(temp_persona_path),
+                max_steps=_config.get("max_steps"),
+            )
+            if new_agent is None:
+                raise RuntimeError("Failed to rebuild sandbox agent")
+
+            new_wrapper = SilentAgentWrapper(new_agent, new_registry)
+        except Exception:
+            new_tempdir.cleanup()
+            raise
+
+        # 原子性替换：先建好再换引用
+        old_tempdir, old_wrapper, old_persona = _sandbox_agent
+        _sandbox_agent = (new_tempdir, new_wrapper, new_persona_obj)
+        _sandbox_persona_name = persona_data["name"]
+
+        # 清理旧 tempdir
+        old_tempdir.cleanup()
+
+        logger.info(f"[Sandbox] 私密角色已导入: {safe_name}")
+        return {
+            "status": "ok",
+            "persona": persona_data["name"],
+            "message": f"私密角色 \"{persona_data['name']}\" 已导入",
+        }
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="角色卡 JSON 格式无效")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SandboxImport] 导入失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="导入失败，请检查文件格式")
+
+
 # WebSocket — 对话
 @app.websocket("/ws/chat")
 async def websocket_chat(ws: WebSocket):
@@ -939,9 +1139,13 @@ async def websocket_chat(ws: WebSocket):
             # 发送"正在输入"状态
             await ws.send_json({"type": "status", "content": "thinking"})
 
-            # 获取 agent 并执行（wrapper.run() 已处理消息记录、HMM 状态和活人感）
-            try:
+            # 根据无痕模式选择 agent
+            if _sandbox_enabled and _sandbox_agent:
+                wrapper = _sandbox_agent[1]
+            else:
                 wrapper = _get_or_create_agent()
+
+            try:
                 if wrapper.registry:
                     wrapper.registry.on_user_message()
                     # 获取当前情绪，随消息一起发送
@@ -958,7 +1162,7 @@ async def websocket_chat(ws: WebSocket):
                         wrapper.registry.trigger.connection_axis.on_contact()
                     except Exception as e:
                         logger.warning(f"Connection cooldown failed: {e}")
-                    await ws.send_json({"type": "message", "content": response, "emotion": current_emotion})
+                    await ws.send_json({"type": "message", "content": response, "emotion": current_emotion, "sandbox": _sandbox_enabled})
                 else:
                     await ws.send_json({"type": "error", "content": "抱歉，我出神了没听清… 能再说一遍吗？"})
             except Exception as e:

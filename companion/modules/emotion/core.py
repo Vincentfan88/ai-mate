@@ -35,7 +35,7 @@ class EmotionSystem:
         state_file: str = "workspace/companion/states/emotion_state.json",
         emotional_config: Optional[dict] = None,
     ):
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             self.config = json.load(f)
         self.emotion_types = self.config["emotion_types"]
         self.residue = EmotionResidue(state_file, self.config["residue"]["decay_factor"])

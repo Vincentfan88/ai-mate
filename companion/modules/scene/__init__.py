@@ -33,7 +33,7 @@ class SceneLibrary:
     """场景库 — 加权匹配算法"""
 
     def __init__(self, config_path: str = "companion/config/scenes.json"):
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         self.scenes: Dict[str, Scene] = {}
         scenes_data = config.get("scenes")

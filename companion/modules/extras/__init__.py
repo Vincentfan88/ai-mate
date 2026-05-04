@@ -68,7 +68,7 @@ class HabitTracker:
         self.state_path = Path(state_path)
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             self.config = json.load(f)
 
         self.habits: Dict[str, List[str]] = {"daily": [], "weekly": []}

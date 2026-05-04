@@ -1792,6 +1792,87 @@ body {
 }
 
 /* ═══════════════════════════════════════
+   Sandbox / Incognito Mode
+   ═══════════════════════════════════════ */
+
+/* Highlighted card in AI 设定 tab */
+.setting-group--highlight {
+  background: linear-gradient(135deg, rgba(201, 169, 110, 0.06), rgba(201, 169, 110, 0.02));
+  border: 1px solid rgba(201, 169, 110, 0.2);
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  transition: all var(--duration-fast) ease;
+}
+
+.setting-group--highlight.active {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, rgba(201, 169, 110, 0.12), rgba(201, 169, 110, 0.04));
+}
+
+.sandbox-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.sandbox-toggle-info label {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Sandbox actions row (shown when active) */
+.sandbox-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--space-sm) 0;
+}
+
+.sandbox-status-line {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.sandbox-import-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sandbox-import-row .btn-primary.btn-sm {
+  min-width: 56px;
+}
+
+.sandbox-divider {
+  height: 1px;
+  background: var(--rule-light);
+  margin: 4px 0;
+}
+
+/* Chat header sandbox badge */
+.sandbox-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(201, 169, 110, 0.12);
+  border: 1px solid rgba(201, 169, 110, 0.25);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+
+/* ═══════════════════════════════════════
    Responsive
    ═══════════════════════════════════════ */
 

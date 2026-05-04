@@ -39,6 +39,7 @@
         <div class="chat-header">
           <div class="status-dot" id="statusDot"></div>
           <span class="status-text" id="statusText">在线 · ENFP</span>
+          <span class="sandbox-badge" id="sandboxBadge" style="display:none">🛡️ 私密</span>
         </div>
 
         <!-- Welcome screen (shown when no messages) -->
@@ -82,6 +83,33 @@
           <div class="tab-content active" id="tabPersona">
             <div class="tab-persona-grid">
               <div class="tab-persona-left">
+                <!-- 私密模式卡片 -->
+                <div class="setting-group setting-group--highlight" id="sandboxCard">
+                  <div class="sandbox-toggle-row">
+                    <div class="sandbox-toggle-info">
+                      <label>🔒 私密模式</label>
+                      <div class="hint" id="sandboxHint">开启后对话记录和角色卡写入临时沙盒，关闭即刻焚毁</div>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="sandboxToggle">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <!-- 私密模式下的操作区（默认隐藏） -->
+                <div class="sandbox-actions" id="sandboxActions" style="display:none">
+                  <div class="sandbox-status-line" id="sandboxPersonaStatus">未导入私密角色卡</div>
+                  <div class="sandbox-import-row">
+                    <input type="file" id="sandboxFileInput" accept=".json" class="file-input-hidden">
+                    <button class="btn-secondary btn-sm" id="sandboxSelectBtn" onclick="document.getElementById('sandboxFileInput').click()">选择角色卡</button>
+                    <button class="btn-primary btn-sm" id="sandboxImportBtn" onclick="importSandboxPersona()">导入</button>
+                  </div>
+                  <div class="sandbox-divider"></div>
+                  <button class="btn-danger btn-sm" id="sandboxClearBtn" onclick="clearSandbox()">
+                    <span>🔥 焚毁私密记录</span>
+                  </button>
+                </div>
+
                 <div class="setting-group">
                   <label>人格</label>
                   <div class="persona-select-row">
