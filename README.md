@@ -1,6 +1,6 @@
 # ai-mate
 
-AI 伙伴系统 v1.1 — 拥有"活人感"的 AI 伙伴，支持 16 种 MBTI 人格、飞书 Bot 集成和 Web UI。
+AI 伙伴系统 v1.2 — 拥有"活人感"的 AI 伙伴，支持 16 种 MBTI 人格、飞书 Bot 集成和 Web UI。
 
 [中文](#中文) | [English](#english)
 
@@ -74,6 +74,22 @@ python -m companion.cli --persona default      # 指定人格
 launchctl start com.ai-mate.webui
 ```
 
+### 更新日志
+
+#### v1.2 (2026-05-05)
+- 新增后台循环总开关 — 关闭后 AI 不会主动发消息和预取热搜，节省 Token 消耗
+- 私密模式（Sandbox）修复 — 私密模式主动性隔离 + 代码审查修复
+- 配置持久化增强 — 后台循环开关支持热切换并持久化
+
+#### v1.1 (2026-05-03)
+- 开源准备 + 安全审计报告
+- 多模块能力扩展 — 时间感知 + 闪回记忆 + 插件系统
+- 私密模式（Sandbox）+ 角色隔离架构
+- WebUI 杂志风 redesign + 移动端响应式
+- Token 消耗统计 + 费用预警 + 配置持久化
+
+---
+
 ### 开发规划
 
 | 阶段 | 模型方案 | 说明 |
@@ -122,7 +138,7 @@ python -m pytest tests/companion/ -v --tb=short
 
 ### Overview
 
-ai-mate is an AI mate system v1.1 built on the Mini-Agent framework. It ported the "aliveness" capabilities from a 24K-line Flask system into a lightweight async Agent loop, preserving all core features:
+ai-mate is an AI mate system v1.2 built on the Mini-Agent framework. It ported the "aliveness" capabilities from a 24K-line Flask system into a lightweight async Agent loop, preserving all core features:
 
 - **16 MBTI Personalities** — Each with distinct speaking style, emotional expression, and scene adaptation
 - **8-Dimension Liveness** — Spontaneous expression, initiative, emotional depth, scene matching, and more

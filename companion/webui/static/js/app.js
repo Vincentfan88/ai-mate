@@ -85,6 +85,40 @@ async function clearSandbox() {
   }
 }
 
+// ── 后台循环总开关 ──
+let _proactiveToggleInProgress = false;
+
+async function toggleProactive() {
+  if (_proactiveToggleInProgress) return;
+  _proactiveToggleInProgress = true;
+
+  const checkbox = document.getElementById('proactiveToggle');
+  const statusEl = document.getElementById('proactiveStatus');
+  const enabled = checkbox.checked;
+
+  try {
+    const res = await fetch('/api/proactive/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      currentConfig.proactive_enabled = enabled;
+      statusEl.textContent = enabled ? '状态：✅ 已开启' : '状态：⏸️ 已关闭（后台模式）';
+      showToast(data.message);
+    } else {
+      showToast('操作失败: ' + (data.detail || '未知错误'), 'error');
+      checkbox.checked = !enabled;
+    }
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+    checkbox.checked = !enabled;
+  } finally {
+    _proactiveToggleInProgress = false;
+  }
+}
+
 async function importSandboxPersona() {
   const fileInput = document.getElementById('sandboxFileInput');
   if (!fileInput.files || fileInput.files.length === 0) {
@@ -287,6 +321,7 @@ async function saveAllSettings() {
     feishu_app_secret: document.getElementById('feishuAppSecret').value || '',
     feishu_chat_id: document.getElementById('feishuChatId').value || '',
     budget: parseFloat(document.getElementById('inputBudget').value) || 0,
+    proactive_enabled: document.getElementById('proactiveToggle').checked,
     quiet_hours_blocks: quietBlocks.map(b => ({ start: b.start, end: b.end })),
     // 兼容旧版字段
     quiet_hours_start: quietBlocks.length > 0 ? quietBlocks[0].start : 0,
@@ -612,6 +647,14 @@ async function loadSettingsForm() {
   document.getElementById('feishuAppSecret').value = currentConfig.feishu_app_secret || '';
   document.getElementById('feishuChatId').value = currentConfig.feishu_chat_id || '';
   updateFeishuStatus(currentConfig.feishu_connected || false);
+
+  // 后台循环开关
+  const proactiveEl = document.getElementById('proactiveToggle');
+  const proactiveStatusEl = document.getElementById('proactiveStatus');
+  if (proactiveEl) {
+    proactiveEl.checked = currentConfig.proactive_enabled !== false;
+    proactiveStatusEl.textContent = proactiveEl.checked ? '状态：✅ 已开启' : '状态：⏸️ 已关闭（后台模式）';
+  }
 
   // 预算
   document.getElementById('inputBudget').value = currentConfig.budget || '';

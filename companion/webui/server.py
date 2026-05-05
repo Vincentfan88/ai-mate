@@ -59,6 +59,8 @@ _config = {
     "feishu_app_secret": os.environ.get("FEISHU_APP_SECRET", ""),
     "feishu_chat_id": os.environ.get("FEISHU_CHAT_ID", ""),
     "feishu_enabled": os.environ.get("FEISHU_ENABLED", "false").lower() == "true",
+    # 后台循环总开关
+    "proactive_enabled": True,
 }
 
 # 缓存 agent 实例
@@ -69,6 +71,7 @@ _feishu_bot = None
 
 # 主动触发循环
 _proactive_loop = None
+_trending_fetcher = None
 
 # 无痕模式沙盒 agent — 与主 agent 完全独立
 _sandbox_agent = None          # (tempdir, SilentAgentWrapper, persona_dict) 或 None
@@ -92,6 +95,8 @@ _USER_KEYS = {
     # 模型配置
     "model", "api_base", "api_key",
     "cloud_price_in", "cloud_price_out", "price_cache_in",
+    # 后台循环开关
+    "proactive_enabled",
 }
 
 
@@ -412,7 +417,7 @@ async def _on_proactive_trigger(event: dict) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _proactive_loop
+    global _proactive_loop, _trending_fetcher
 
     # 从磁盘加载配置
     _load_config()
@@ -420,21 +425,23 @@ async def lifespan(app: FastAPI):
     # 启动飞书 Bot
     _start_feishu_bot()
 
-    # 启动主动触发循环 + 热搜预取
+    # 启动主动触发循环 + 热搜预取（仅在开关开启时）
     from companion.scheduler import ProactiveLoop, TrendingFetcher
     wrapper = _get_or_create_agent()
     registry = wrapper.registry if wrapper else None
-    if registry:
+    if registry and _config.get("proactive_enabled", True):
         _proactive_loop = ProactiveLoop(registry, on_trigger=_on_proactive_trigger)
         asyncio.create_task(_proactive_loop.run())
-        fetcher = TrendingFetcher(
+        _trending_fetcher = TrendingFetcher(
             registry,
             api_key=_config.get("api_key", ""),
             api_base=_config.get("api_base", ""),
             model=_config.get("model", ""),
         )
-        asyncio.create_task(fetcher.run())
+        asyncio.create_task(_trending_fetcher.run())
         logger.info("主动触发循环已启动")
+    else:
+        logger.info("主动触发循环已禁用（后台模式）")
 
     yield
 
@@ -443,6 +450,9 @@ async def lifespan(app: FastAPI):
     if _proactive_loop:
         _proactive_loop.stop()
         _proactive_loop = None
+    if _trending_fetcher:
+        _trending_fetcher.stop()
+        _trending_fetcher = None
     global _agent_ref
     _agent_ref = None
 
@@ -935,6 +945,10 @@ async def update_config(body: dict):
         _stop_feishu_bot()
         _start_feishu_bot()
 
+    # 处理后台循环开关（saveAllSettings 也会发送此字段）
+    if "proactive_enabled" in body:
+        _config["proactive_enabled"] = bool(body["proactive_enabled"])
+
     # 持久化到磁盘
     _save_config()
 
@@ -1007,6 +1021,62 @@ async def token_reset():
     from companion.token_tracker import token_tracker
     token_tracker.reset()
     return {"status": "ok"}
+
+
+# ── 后台循环开关 API ──────────────────────────────────────
+
+
+@app.post("/api/proactive/toggle")
+async def toggle_proactive(body: dict):
+    """开启/关闭主动触发和热搜预取后台循环。"""
+    global _proactive_loop, _trending_fetcher
+
+    enabled = body.get("enabled", True)
+
+    if enabled:
+        # 已开启则不重复创建
+        if _proactive_loop:
+            return {"status": "ok", "enabled": True, "message": "后台循环已开启"}
+
+        try:
+            from companion.scheduler import ProactiveLoop, TrendingFetcher
+            wrapper = _get_or_create_agent()
+            registry = wrapper.registry if wrapper else None
+            if not registry:
+                raise RuntimeError("Agent registry not available")
+            _proactive_loop = ProactiveLoop(registry, on_trigger=_on_proactive_trigger)
+            asyncio.create_task(_proactive_loop.run())
+            _trending_fetcher = TrendingFetcher(
+                registry,
+                api_key=_config.get("api_key", ""),
+                api_base=_config.get("api_base", ""),
+                model=_config.get("model", ""),
+            )
+            asyncio.create_task(_trending_fetcher.run())
+        except Exception as e:
+            # 启动失败：回滚配置，不写入磁盘
+            _proactive_loop = None
+            _trending_fetcher = None
+            _config["proactive_enabled"] = False
+            logger.error(f"[Proactive] 启动失败: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="启动失败，请稍后重试")
+
+        _config["proactive_enabled"] = True
+        _save_config()
+        logger.info("[Proactive] 后台循环已启动")
+        return {"status": "ok", "enabled": True, "message": "后台循环已启动"}
+    else:
+        # 停止现有循环
+        if _proactive_loop:
+            _proactive_loop.stop()
+            _proactive_loop = None
+        if _trending_fetcher:
+            _trending_fetcher.stop()
+            _trending_fetcher = None
+        _config["proactive_enabled"] = False
+        _save_config()
+        logger.info("[Proactive] 后台循环已停止")
+        return {"status": "ok", "enabled": False, "message": "后台循环已停止，进入纯后台模式"}
 
 
 # ── 无痕模式（沙盒）API ─────────────────────────────────────

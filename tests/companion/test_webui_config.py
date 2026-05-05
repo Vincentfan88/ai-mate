@@ -58,6 +58,7 @@ class TestConfigPersistence:
                         "feishu_app_secret": os.environ.get("FEISHU_APP_SECRET", ""),
                         "feishu_chat_id": os.environ.get("FEISHU_CHAT_ID", ""),
                         "feishu_enabled": os.environ.get("FEISHU_ENABLED", "false").lower() == "true",
+                        "proactive_enabled": True,
                         "name": "小美",
                         "greeting": "hello",
                         "has_avatar_ai": False,
@@ -185,6 +186,7 @@ class TestConfigPersistence:
             "quiet_hours_blocks", "quiet_hours_start", "quiet_hours_end",
             "local_model_enabled", "local_model", "local_api_base",
             "feishu_app_id", "feishu_chat_id", "feishu_enabled",
+            "proactive_enabled",
         }
 
         missing = required_keys - srv._USER_KEYS
