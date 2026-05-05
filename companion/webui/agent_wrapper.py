@@ -2,6 +2,9 @@
 import io
 import logging
 import contextlib
+from datetime import datetime
+
+from companion.token_tracker import token_tracker
 
 logger = logging.getLogger("companion")
 
@@ -17,6 +20,32 @@ class SilentAgentWrapper:
     def __init__(self, agent, registry=None):
         self._agent = agent
         self._registry = registry
+        # 注入 token 记录器到 LLM 客户端
+        self._patch_llm()
+
+    def _patch_llm(self):
+        """Monkey-patch LLM generate 以记录 token 消耗。"""
+        original_generate = self._agent.llm.generate
+        model = self._agent.llm.model
+
+        async def _tracked_generate(*args, **kwargs):
+            response = await original_generate(*args, **kwargs)
+            if response.usage:
+                cached = 0
+                if hasattr(response.usage, "prompt_tokens_details"):
+                    cached = getattr(response.usage.prompt_tokens_details, "cached_tokens", 0) or 0
+                elif hasattr(response.usage, "cache_read_input_tokens"):
+                    cached = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+
+                token_tracker.record(
+                    prompt_tokens=response.usage.prompt_tokens or 0,
+                    completion_tokens=response.usage.completion_tokens or 0,
+                    model=model,
+                    cached_tokens=cached,
+                )
+            return response
+
+        self._agent.llm.generate = _tracked_generate
 
     @property
     def agent(self):
